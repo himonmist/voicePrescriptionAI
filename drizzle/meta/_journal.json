@@ -50,6 +50,20 @@
       "when": 1790707185854,
       "tag": "0006_appointment_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790707950305,
+      "tag": "0007_consultations",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790707951144,
+      "tag": "0008_consultation_constraints",
+      "breakpoints": true
     }
   ]
 }

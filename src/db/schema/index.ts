@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean, integer, jsonb, uniqueIndex, index, pgEnum, primaryKey, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, boolean, integer, jsonb, uniqueIndex, index, pgEnum, primaryKey, date, real } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 const id = () => uuid("id").primaryKey().defaultRandom();
@@ -271,3 +271,75 @@ export const appointments = pgTable("appointments", {
   index("appt_org_start_idx").on(t.organizationId, t.startAt),
   index("appt_status_idx").on(t.status),
 ]);
+
+/** One consultation per appointment (unique), and at most one open walk-in per doctor+patient (partial unique). */
+export const consultations = pgTable("consultations", {
+  id: id(),
+  appointmentId: uuid("appointment_id").references(() => appointments.id),
+  doctorUserId: uuid("doctor_user_id").notNull().references(() => users.id),
+  patientId: uuid("patient_id").notNull().references(() => patients.id),
+  organizationId: uuid("organization_id").references(() => organizations.id),
+  mode: text("mode").notNull().default("in_person"),
+  status: text("status").notNull().default("in_progress"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: createdAt(), updatedAt: updatedAt(),
+}, (t) => [
+  uniqueIndex("consult_appt_uq").on(t.appointmentId),
+  uniqueIndex("consult_open_walkin_uq").on(t.doctorUserId, t.patientId).where(sql`${t.status} = 'in_progress' AND ${t.appointmentId} IS NULL`),
+  index("consult_doctor_idx").on(t.doctorUserId, t.startedAt),
+  index("consult_patient_idx").on(t.patientId, t.startedAt),
+]);
+
+/** Recording lifecycle + consent evidence. No audio bytes are stored until a speech-to-text provider is configured (M8). */
+export const audioSessions = pgTable("audio_sessions", {
+  id: id(),
+  consultationId: uuid("consultation_id").notNull().references(() => consultations.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("active"),
+  startedBy: uuid("started_by").notNull().references(() => users.id),
+  consentVerifiedAt: timestamp("consent_verified_at", { withTimezone: true }).notNull(),
+  storageKey: text("storage_key"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  stopReason: text("stop_reason"),
+}, (t) => [uniqueIndex("audio_one_open_uq").on(t.consultationId).where(sql`${t.status} <> 'stopped'`)]);
+
+export const transcriptSegments = pgTable("transcript_segments", {
+  id: id(),
+  consultationId: uuid("consultation_id").notNull().references(() => consultations.id, { onDelete: "cascade" }),
+  seq: integer("seq").notNull(),
+  speaker: text("speaker").notNull(),
+  textEnc: text("text_enc").notNull(),
+  originalTextEnc: text("original_text_enc"),
+  startMs: integer("start_ms"),
+  endMs: integer("end_ms"),
+  source: text("source").notNull().default("manual"),
+  confidence: real("confidence"),
+  flagged: boolean("flagged").notNull().default(false),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  editedBy: uuid("edited_by").references(() => users.id),
+  createdAt: createdAt(), updatedAt: updatedAt(),
+}, (t) => [uniqueIndex("segment_seq_uq").on(t.consultationId, t.seq)]);
+
+export const clinicalNotes = pgTable("clinical_notes", {
+  id: id(),
+  consultationId: uuid("consultation_id").notNull().references(() => consultations.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("draft"),
+  currentVersion: integer("current_version").notNull().default(0),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  createdAt: createdAt(), updatedAt: updatedAt(),
+}, (t) => [uniqueIndex("note_consult_uq").on(t.consultationId)]);
+
+/** Immutable (DB trigger, migration 0008). Content is AES-GCM encrypted JSON. */
+export const clinicalNoteVersions = pgTable("clinical_note_versions", {
+  id: id(),
+  noteId: uuid("note_id").notNull().references(() => clinicalNotes.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  kind: text("kind").notNull(),
+  contentEnc: text("content_enc").notNull(),
+  authorId: uuid("author_id").notNull().references(() => users.id),
+  summary: text("summary"),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("note_version_uq").on(t.noteId, t.version)]);

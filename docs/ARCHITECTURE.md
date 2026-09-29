@@ -46,7 +46,17 @@ Single source of truth: `src/server/patients/access.ts` (`accessLevel`), deny by
 - Editing a schedule never cancels existing appointments.
 - Visit reason is encrypted; if it cannot be decrypted it shows as unavailable rather than failing the list. Clinical fields deliberately do NOT have this tolerance.
 
+## Consultations (M6)
+- **Creation is idempotent.** Unique constraints (one consultation per appointment; one open walk-in per doctor+patient) make concurrent/double-click starts converge on a single row. The linked appointment moves `checked_in → in_progress` in the same transaction.
+- **Encounter-level access.** Only the authoring doctor (who must still be verified/active and have clinical access to the patient) can open or edit a consultation. Another doctor who holds a patient share sees only the *approved* note, never the transcript. Everyone else gets 404.
+- **Transcript** text is encrypted at rest; the first original of an edited line is kept. Uncertain lines can be flagged. Locked once the consultation is completed.
+- **Clinical note.** Every section is either `documented` (clinician-written text) or `not_documented`; omission is never treated as normal. Provenance is forced to `manual` server-side; only the M8 drafting path may create `ai_draft` content. Each save appends an immutable, encrypted version (DB trigger forbids UPDATE/DELETE); saves use optimistic locking on `baseVersion`. Approval is explicit; afterwards changes are `amendment` versions that require a reason, and the DB guard rejects a plain edit that races an approval.
+- **Recording consent gate.** Starting or resuming a recording verifies recorded consent server-side; withdrawing consent stops any live session in the same transaction. **No audio is captured or stored yet** — there is no STT provider; the UI says so and offers manual transcript entry. `audio_sessions` records lifecycle + consent evidence only.
+- Deleting patient data later will need an explicit erasure procedure: note versions are immutable by design.
+- **Known limits:** no realtime collaboration; vitals flags are simple range checks, not clinical decision support.
+
 ## Testing
 - `npm test` runs unit + API-handler tests. Integration tests (`tests/integration`) run against a real Postgres when `TEST_DATABASE_URL` is set (CI uses a `postgres:17` service container; locally any throwaway DB) and are skipped otherwise. They apply the real migrations and cover: unique constraints, transactional rollback, atomic lockout counter, append-only audit trigger, DB rate limiter under concurrency, verification workflow with concurrent decisions.
 - The DB client uses the Neon serverless driver for `*.neon.tech` hosts and node-postgres otherwise, so the app runs locally without Neon.
 - Local first admin: `SEED_ADMIN_EMAIL=... SEED_ADMIN_PASSWORD=... npm run db:seed`.
+- `scripts/smoke/consultation.sh` runs 37 assertions against a live server + disposable DB (found two bugs that unit/integration tests missed). Run it before releases: build, start on :3111, `bash scripts/smoke/consultation.sh`.

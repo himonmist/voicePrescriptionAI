@@ -43,6 +43,14 @@ describe("withActor", () => {
     expect(r.status).toBe(500); expect(JSON.stringify(await r.json())).not.toMatch(/hunter2|db\.internal/);
     spy.mockRestore();
   });
+  it("an EMPTY body with a JSON content-type is fine (action endpoints like approve/complete send no body)", async () => {
+    getActor.mockResolvedValue(actor);
+    const fn = vi.fn().mockResolvedValue({ ok: true });
+    const r = await withActor(fn)(new Request("https://app.test/x", { method: "POST", headers: { origin: "https://app.test", "content-type": "application/json" } }), ctx);
+    expect(r.status).toBe(200); expect(fn).toHaveBeenCalledWith(expect.objectContaining({ body: undefined }));
+    const ws = await withActor(fn)(new Request("https://app.test/x", { method: "POST", headers: { origin: "https://app.test", "content-type": "application/json" }, body: "   " }), ctx);
+    expect(ws.status).toBe(200);
+  });
   it("respects a custom success status and 400 on malformed JSON", async () => {
     getActor.mockResolvedValue(actor);
     expect((await withActor(async () => ({}), { status: 201 })(req(), ctx)).status).toBe(201);

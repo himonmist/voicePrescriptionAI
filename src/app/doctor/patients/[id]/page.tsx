@@ -3,6 +3,7 @@ import { getActor } from "@/server/auth/current-actor";
 import { patientService } from "@/server/patients";
 import { NotFoundError } from "@/server/errors";
 import { AddClinicalItem, ConsentPanel, ResolveItem } from "@/components/PatientActions";
+import { StartConsultation } from "@/components/StartConsultation";
 
 const KIND_LABEL: Record<string, string> = { allergy: "Allergies", condition: "Conditions", medication: "Current medications", immunization: "Immunizations", family_history: "Family history", procedure: "Procedures" };
 
@@ -19,6 +20,7 @@ export default async function PatientRecord({ params }: { params: Promise<{ id: 
     <main className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold">{p.fullName}</h1>
       <p className="text-sm text-slate-600">{p.patientCode} · {p.sex} · DOB {p.dob}</p>
+      {view.level === "clinical" && <p className="mt-3"><StartConsultation patientId={id} label="Start walk-in consultation" /></p>}
       <section aria-labelledby="demo" className="mt-6"><h2 id="demo" className="font-medium">Contact</h2>
         <dl className="mt-2 grid grid-cols-[8rem_1fr] gap-1 text-sm"><dt className="text-slate-500">Mobile</dt><dd>{p.phone ?? "—"}</dd><dt className="text-slate-500">Email</dt><dd>{p.email ?? "—"}</dd><dt className="text-slate-500">Address</dt><dd>{p.address ?? "—"}</dd><dt className="text-slate-500">Emergency</dt><dd>{p.emergencyContact ? `${p.emergencyContact.name} (${p.emergencyContact.relation ?? "contact"}) ${p.emergencyContact.phone}` : "—"}</dd></dl>
       </section>

@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNull, or, gt, like, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import type { Db } from "@/db/types";
-import { auditEvents, doctorProfiles, patientClinicalItems, patientConsents, patientDoctorRelationships, patientMerges, patients } from "@/db/schema";
+import { auditEvents, audioSessions, consultations, doctorProfiles, patientClinicalItems, patientConsents, patientDoctorRelationships, patientMerges, patients } from "@/db/schema";
 import { decryptField, encryptField } from "@/lib/security/crypto";
 import { normalizeName, normalizePhone, phoneBlindIndex } from "@/lib/security/pii";
 import { ConflictError } from "@/server/errors";
@@ -75,7 +75,17 @@ export function drizzlePatientRepo(db: Db = getDb()): PatientRepo {
       return db.select({ id: patients.id, patientCode: patients.patientCode, fullName: patients.fullName, dob: patients.dob, sex: patients.sex })
         .from(patients).where(and(scopeWhere(scope), or(...conds))).orderBy(patients.fullNameNorm).limit(Math.min(limit, 50)).offset(offset);
     },
-    async addConsent(c) { await db.insert(patientConsents).values(c); },
+    async addConsent(c) {
+      await db.transaction(async (tx) => {
+        await tx.insert(patientConsents).values(c);
+        if (c.kind === "recording" && !c.granted) {
+          // Withdrawal takes effect immediately: any live recording for this patient is stopped.
+          const stopped = await tx.update(audioSessions).set({ status: "stopped", endedAt: new Date(), stopReason: "consent_withdrawn" })
+            .where(and(sql`${audioSessions.status} <> 'stopped'`, sql`${audioSessions.consultationId} IN (SELECT id FROM ${consultations} WHERE patient_id = ${c.patientId})`)).returning({ consultationId: audioSessions.consultationId });
+          for (const s of stopped) await tx.insert(auditEvents).values({ action: "recording.stopped_consent_withdrawn", actorId: c.capturedBy, resourceType: "consultation", resourceId: s.consultationId, metadata: {} });
+        }
+      });
+    },
     async latestConsents(patientId) {
       const rows = await db.select().from(patientConsents).where(eq(patientConsents.patientId, patientId)).orderBy(desc(patientConsents.createdAt), desc(patientConsents.id));
       const seen = new Set<string>(); const out = [];

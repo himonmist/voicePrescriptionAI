@@ -5,6 +5,7 @@ import { appointmentService } from "@/server/appointments";
 import { fmtWhen } from "@/lib/format";
 import { addDays, isValidDate, utcToZoned } from "@/lib/time";
 import { AppointmentActions } from "@/components/AppointmentActions";
+import { StartConsultation } from "@/components/StartConsultation";
 
 export default async function DoctorAppointments({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const actor = await getActor();
@@ -26,7 +27,7 @@ export default async function DoctorAppointments({ searchParams }: { searchParam
                 <p className="text-sm text-slate-600">{a.mode === "online" ? "Online" : "In person"}{isDoc && a.reason ? ` · ${a.reason}` : ""}{isRec && a.doctorName ? ` · ${a.doctorName}` : ""}</p></div>
               <span className="rounded bg-slate-100 px-2 py-0.5 text-xs">{a.status.replace("_", " ")}</span>
             </div>
-            <AppointmentActions id={a.id} status={a.status} role={isDoc ? "doctor" : "reception"} />
+            <div className="flex flex-wrap items-center gap-3"><AppointmentActions id={a.id} status={a.status} role={isDoc ? "doctor" : "reception"} />{isDoc && (a.status === "checked_in" || a.status === "in_progress") && <StartConsultation appointmentId={a.id} label={a.status === "in_progress" ? "Open consultation" : "Start consultation"} />}</div>
           </li>))}</ul>)}
     </main>
   );

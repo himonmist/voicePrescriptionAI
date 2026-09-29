@@ -18,7 +18,8 @@ export function withActor(handler: (a: Args) => Promise<unknown>, opts: { status
     if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     let body: unknown = undefined;
     if (req.method !== "GET" && req.method !== "HEAD" && (req.headers.get("content-type") ?? "").includes("json")) {
-      try { body = await req.json(); } catch { return NextResponse.json({ error: "Malformed JSON" }, { status: 400 }); }
+      const raw = await req.text();
+      if (raw.trim() !== "") { try { body = JSON.parse(raw); } catch { return NextResponse.json({ error: "Malformed JSON" }, { status: 400 }); } }
     }
     try {
       const result = await handler({ req, actor, params: await ctx.params, body });
