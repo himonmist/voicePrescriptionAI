@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import type { Role } from "./rbac";
 
-export interface SessionClaims { sub: string; roles: Role[]; orgId: string | null; sid: string }
+export interface SessionClaims { sub: string; roles: Role[]; orgId: string | null; sid: string; mfaPending?: boolean }
 
 function key(): Uint8Array {
   const s = process.env.AUTH_SECRET;
@@ -12,7 +12,7 @@ function key(): Uint8Array {
 /** Short-lived access token. `sid` links to a revocable server-side session row. */
 export async function signSession(c: SessionClaims, ttlSeconds: number): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  return new SignJWT({ roles: c.roles, orgId: c.orgId, sid: c.sid })
+  return new SignJWT({ roles: c.roles, orgId: c.orgId, sid: c.sid, mfaPending: !!c.mfaPending })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(c.sub).setIssuedAt(now).setExpirationTime(now + ttlSeconds)
     .setIssuer("smartdoctoraid").sign(key());
@@ -21,7 +21,7 @@ export async function signSession(c: SessionClaims, ttlSeconds: number): Promise
 export async function verifySession(token: string): Promise<SessionClaims | null> {
   try {
     const { payload } = await jwtVerify(token, key(), { algorithms: ["HS256"], issuer: "smartdoctoraid" });
-    return { sub: String(payload.sub), roles: payload.roles as Role[], orgId: (payload.orgId as string | null) ?? null, sid: String(payload.sid) };
+    return { sub: String(payload.sub), roles: payload.roles as Role[], orgId: (payload.orgId as string | null) ?? null, sid: String(payload.sid), mfaPending: payload.mfaPending === true };
   } catch {
     return null;
   }

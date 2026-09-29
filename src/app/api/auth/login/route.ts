@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     if (wantsJson) return NextResponse.json({ error: r.error, mfaRequired: r.mfaRequired ?? false }, { status: r.status });
     return NextResponse.redirect(new URL(`/login?error=${r.mfaRequired ? "mfa" : "1"}`, req.url), 303);
   }
-  const res = wantsJson ? NextResponse.json({ ok: true }) : NextResponse.redirect(new URL(landingFor(r.roles), req.url), 303);
+  const res = wantsJson ? NextResponse.json({ ok: true }) : NextResponse.redirect(new URL(landingFor(r.roles, r.mfaPending), req.url), 303);
   res.headers.append("Set-Cookie", sessionCookie(r.token, r.expiresAt));
   return res;
 }

@@ -201,3 +201,12 @@ export const patientMerges = pgTable("patient_merges", {
   reason: text("reason").notNull(),
   createdAt: createdAt(),
 });
+
+/** MFA recovery codes: only SHA-256 hashes are stored; each code is single-use. */
+export const userRecoveryCodes = pgTable("user_recovery_codes", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("recovery_user_hash_uq").on(t.userId, t.codeHash)]);

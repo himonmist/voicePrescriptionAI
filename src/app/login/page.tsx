@@ -8,6 +8,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <label className="block text-sm">Email<input name="email" type="email" required autoComplete="email" className="mt-1 w-full rounded border p-2" /></label>
         <label className="block text-sm">Password<input name="password" type="password" required autoComplete="current-password" className="mt-1 w-full rounded border p-2" /></label>
         <label className="block text-sm">Verification code (if enabled)<input name="totp" inputMode="numeric" pattern="\d{6}" autoComplete="one-time-code" className="mt-1 w-full rounded border p-2" /></label>
+        <details className="text-sm"><summary className="cursor-pointer">Lost your device? Use a recovery code</summary><label className="mt-2 block">Recovery code<input name="recoveryCode" placeholder="xxxxx-xxxxx" className="mt-1 w-full rounded border p-2" /></label></details>
         <button className="w-full rounded bg-[var(--brand)] p-2 font-medium text-white">Log in</button>
       </form>
       <p className="mt-4 text-sm">New here? <a className="underline" href="/register/patient">Patient sign-up</a> · <a className="underline" href="/register/doctor">Doctor sign-up</a></p>

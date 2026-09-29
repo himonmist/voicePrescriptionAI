@@ -23,7 +23,11 @@ export const ROLE_PERMISSIONS: Record<Role, Set<Permission>> = {
   content_manager: P("cms:write"),
 };
 
-export interface Actor { userId: string; roles: Role[]; orgId: string | null }
+export interface Actor { userId: string; roles: Role[]; orgId: string | null; /** Privileged user who has not enrolled MFA yet: session is restricted to the enrolment flow. */ mfaPending?: boolean }
+
+/** Roles that must use MFA (spec §23). */
+export const PRIVILEGED_ROLES: Role[] = ["super_admin", "org_admin", "finance", "support", "content_manager"];
+export const isPrivileged = (roles: Role[]) => roles.some((r) => PRIVILEGED_ROLES.includes(r));
 
 export class ForbiddenError extends Error {
   constructor(public permission: Permission) { super(`Forbidden: ${permission}`); this.name = "ForbiddenError"; }

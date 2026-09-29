@@ -10,6 +10,11 @@ describe("session tokens", () => {
     expect(c?.sub).toBe("u1");
     expect(c?.roles).toEqual(["doctor"]);
   });
+  it("round-trips the mfaPending flag (defaults to false)", async () => {
+    const a = await verifySession(await signSession({ sub: "u", roles: ["super_admin"], orgId: null, sid: "s", mfaPending: true }, 60));
+    const b = await verifySession(await signSession({ sub: "u", roles: ["doctor"], orgId: null, sid: "s" }, 60));
+    expect(a?.mfaPending).toBe(true); expect(b?.mfaPending).toBe(false);
+  });
   it("rejects tampered tokens", async () => {
     const t = await signSession({ sub: "u1", roles: ["doctor"], orgId: null, sid: "s1" }, 60);
     expect(await verifySession(t.slice(0, -2) + "xx")).toBeNull();

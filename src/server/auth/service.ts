@@ -1,8 +1,9 @@
 import { hashPassword, verifyPassword, validatePasswordPolicy } from "@/lib/security/password";
 import { signSession, verifySession } from "@/lib/security/session";
 import type { RateResult } from "@/lib/security/rate-limit";
-import type { Actor, Role } from "@/lib/security/rbac";
+import { isPrivileged, type Actor, type Role } from "@/lib/security/rbac";
 import { verifyTotp } from "@/lib/security/totp";
+import { hashRecoveryCode } from "@/lib/security/recovery";
 import { loginSchema, registerDoctorSchema, registerPatientSchema } from "@/lib/validation/auth";
 
 export interface UserRow { id: string; email: string; passwordHash: string; failedLogins: number; lockedUntil: Date | null; disabledAt: Date | null }
@@ -18,12 +19,14 @@ export interface AuthRepo {
   rolesFor(userId: string): Promise<Role[]>;
   /** Decrypted TOTP secret if MFA is enrolled, else null. */
   primaryOrgFor(userId: string): Promise<string | null>;
+  /** Marks the (hashed) recovery code used. Returns false if unknown or already used. */
+  consumeRecoveryCode(userId: string, codeHash: string): Promise<boolean>;
   mfaSecretFor(userId: string): Promise<string | null>;
   audit(e: { action: string; actorId?: string | null; ip?: string; metadata?: Record<string, unknown> }): Promise<void>;
 }
 
 type Fail = { ok: false; status: number; error: string; mfaRequired?: boolean };
-type LoginOk = { ok: true; token: string; expiresAt: Date; roles: Role[] };
+type LoginOk = { ok: true; token: string; expiresAt: Date; roles: Role[]; mfaPending: boolean };
 const GENERIC = { ok: false, status: 401, error: "Invalid email or password" } as const;
 const SESSION_TTL_S = 60 * 60 * 8;
 const LOGIN_LIMIT = { max: 10, windowMs: 15 * 60_000 };
@@ -73,27 +76,30 @@ export function createAuthService(repo: AuthRepo, limiter: { hit(key: string, li
       const mfaSecret = await repo.mfaSecretFor(user.id);
       if (mfaSecret) {
         // Reached only after the password is proven, so this does not leak MFA status.
-        if (!p.data.totp) return { ok: false, status: 401, error: "Verification code required", mfaRequired: true };
-        if (!verifyTotp(mfaSecret, p.data.totp, Date.now())) {
+        if (!p.data.totp && !p.data.recoveryCode) return { ok: false, status: 401, error: "Verification code required", mfaRequired: true };
+        const good = p.data.totp ? verifyTotp(mfaSecret, p.data.totp, Date.now()) : await repo.consumeRecoveryCode(user.id, hashRecoveryCode(p.data.recoveryCode!));
+        if (!good) {
           await repo.recordFailedLogin(user.id);
           await repo.audit({ action: "auth.mfa_failed", actorId: user.id, ip: ctx.ip });
           return { ...GENERIC };
         }
+        if (p.data.recoveryCode) await repo.audit({ action: "auth.recovery_code_used", actorId: user.id, ip: ctx.ip });
       }
       await repo.resetFailedLogins(user.id);
       const roles = await repo.rolesFor(user.id);
+      const mfaPending = isPrivileged(roles) && !mfaSecret; // must enrol before touching anything else
       const expiresAt = new Date(Date.now() + SESSION_TTL_S * 1000);
       const sid = await repo.createSession({ userId: user.id, expiresAt, ip: ctx.ip });
-      const token = await signSession({ sub: user.id, roles, orgId: await repo.primaryOrgFor(user.id), sid }, SESSION_TTL_S);
+      const token = await signSession({ sub: user.id, roles, orgId: await repo.primaryOrgFor(user.id), sid, mfaPending }, SESSION_TTL_S);
       await repo.audit({ action: "auth.login", actorId: user.id, ip: ctx.ip });
-      return { ok: true, token, expiresAt, roles };
+      return { ok: true, token, expiresAt, roles, mfaPending };
     },
 
     /** Verifies signature AND that the server-side session is still active (revocation). */
     async authenticate(token: string): Promise<Actor | null> {
       const c = await verifySession(token);
       if (!c || !(await repo.isSessionActive(c.sid))) return null;
-      return { userId: c.sub, roles: c.roles, orgId: c.orgId };
+      return { userId: c.sub, roles: c.roles, orgId: c.orgId, mfaPending: c.mfaPending };
     },
 
     async logout(token: string) {

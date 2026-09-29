@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import type { Db } from "@/db/types";
-import { auditEvents, doctorProfiles, organizationMemberships, sessions, userRoles, users } from "@/db/schema";
+import { auditEvents, doctorProfiles, organizationMemberships, sessions, userRecoveryCodes, userRoles, users } from "@/db/schema";
 import { decryptField } from "@/lib/security/crypto";
 import type { AuthRepo } from "./service";
 
@@ -42,6 +42,11 @@ export function drizzleAuthRepo(db: Db = getDb()): AuthRepo {
     },
     async revokeSession(id) { await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, id)); },
     async rolesFor(id) { return (await db.select({ role: userRoles.role }).from(userRoles).where(eq(userRoles.userId, id))).map((r) => r.role); },
+    async consumeRecoveryCode(userId, codeHash) {
+      const r = await db.update(userRecoveryCodes).set({ usedAt: new Date() })
+        .where(and(eq(userRecoveryCodes.userId, userId), eq(userRecoveryCodes.codeHash, codeHash), sql`${userRecoveryCodes.usedAt} IS NULL`)).returning({ id: userRecoveryCodes.id });
+      return r.length > 0;
+    },
     async primaryOrgFor(id) {
       const [m] = await db.select({ o: organizationMemberships.organizationId }).from(organizationMemberships).where(eq(organizationMemberships.userId, id)).orderBy(organizationMemberships.createdAt).limit(1);
       if (m) return m.o;

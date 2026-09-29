@@ -4,6 +4,7 @@ import { hashPassword } from "@/lib/security/password";
 import { MemoryRateLimiter } from "@/lib/security/rate-limit";
 import type { Role } from "@/lib/security/rbac";
 import { generateSecret, generateTotp } from "@/lib/security/totp";
+import { hashRecoveryCode } from "@/lib/security/recovery";
 
 beforeAll(() => { process.env.AUTH_SECRET = "test-secret-test-secret-test-secret-32+"; });
 
@@ -14,6 +15,7 @@ function fakeRepo() {
   const doctors: { userId: string; status: string }[] = [];
   const mfa = new Map<string, string>();
   const orgs = new Map<string, string>();
+  const recovery = new Map<string, boolean>();
   const repo: AuthRepo = {
     async findUserByEmail(e) { return users.find((u) => u.email === e) ?? null; },
     async createUser(u) { const row = { ...u, id: `u${users.length + 1}`, failedLogins: 0, lockedUntil: null, disabledAt: null, roles: u.roles }; users.push(row); return row; },
@@ -24,11 +26,12 @@ function fakeRepo() {
     async isSessionActive(id) { const s = sessions.get(id); return !!s && !s.revoked && s.expiresAt > new Date(); },
     async revokeSession(id) { const s = sessions.get(id); if (s) s.revoked = true; },
     async rolesFor(id) { return users.find((u) => u.id === id)!.roles; },
+    async consumeRecoveryCode(id, hash) { const k = `${id}:${hash}`; if (!recovery.has(k) || recovery.get(k)) return false; recovery.set(k, true); return true; },
     async primaryOrgFor(id) { return orgs.get(id) ?? null; },
     async mfaSecretFor(id) { return mfa.get(id) ?? null; },
     async audit(e) { audit.push(e); },
   };
-  return { repo, users, doctors, audit, sessions, mfa, orgs };
+  return { repo, users, doctors, audit, sessions, mfa, orgs, recovery };
 }
 
 describe("auth service", () => {
@@ -104,6 +107,45 @@ describe("auth service", () => {
     const r = await svc.login({ email: "o@x.com", password: "Correct-Horse-9!" }, { ip: "1" });
     if (!r.ok) throw new Error("login failed");
     expect((await svc.authenticate(r.token))?.orgId).toBe("org-123");
+  });
+
+  describe("privileged roles must enrol in MFA", () => {
+    async function adminLogin(mfaEnrolled: boolean) {
+      await svc.registerPatient({ fullName: "A B", email: "adm@x.com", phone: "01712345678", password: "Correct-Horse-9!" });
+      f.users[0].roles = ["super_admin"];
+      if (mfaEnrolled) f.mfa.set("u1", generateSecret());
+      return svc.login({ email: "adm@x.com", password: "Correct-Horse-9!", totp: mfaEnrolled ? generateTotp([...f.mfa.values()][0], Date.now()) : undefined }, { ip: "1" });
+    }
+    it("admin without MFA gets a restricted (mfaPending) session", async () => {
+      const r = await adminLogin(false); if (!r.ok) throw new Error("login failed");
+      expect((await svc.authenticate(r.token))?.mfaPending).toBe(true);
+    });
+    it("admin with MFA gets a full session", async () => {
+      const r = await adminLogin(true); if (!r.ok) throw new Error("login failed");
+      expect((await svc.authenticate(r.token))?.mfaPending).toBeFalsy();
+    });
+    it("regular users without MFA are not restricted", async () => {
+      await svc.registerPatient({ fullName: "A B", email: "p@x.com", phone: "01712345678", password: "Correct-Horse-9!" });
+      const r = await svc.login({ email: "p@x.com", password: "Correct-Horse-9!" }, { ip: "1" }); if (!r.ok) throw new Error("x");
+      expect((await svc.authenticate(r.token))?.mfaPending).toBeFalsy();
+    });
+  });
+
+  describe("MFA recovery codes", () => {
+    it("a recovery code logs in once and cannot be reused", async () => {
+      await svc.registerPatient({ fullName: "A B", email: "m@x.com", phone: "01712345678", password: "Correct-Horse-9!" });
+      f.mfa.set("u1", generateSecret()); f.recovery.set(`u1:${hashRecoveryCode("abcde-fghjk")}`, false);
+      const login = () => svc.login({ email: "m@x.com", password: "Correct-Horse-9!", recoveryCode: "ABCDE-fghjk" }, { ip: "1" });
+      expect((await login()).ok).toBe(true);
+      expect((await login()).ok).toBe(false);
+    });
+    it("a recovery code alone (wrong password) never works", async () => {
+      await svc.registerPatient({ fullName: "A B", email: "m@x.com", phone: "01712345678", password: "Correct-Horse-9!" });
+      f.mfa.set("u1", generateSecret()); f.recovery.set(`u1:${hashRecoveryCode("abcde-fghjk")}`, false);
+      const r = await svc.login({ email: "m@x.com", password: "wrong-Pass-1AAAA", recoveryCode: "abcde-fghjk" }, { ip: "1" });
+      expect(r.ok).toBe(false);
+      expect(f.recovery.get(`u1:${hashRecoveryCode("abcde-fghjk")}`)).toBe(false);
+    });
   });
 
   describe("MFA", () => {

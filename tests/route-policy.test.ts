@@ -22,4 +22,20 @@ describe("route policy (deny by default)", () => {
   it("unknown protected-looking paths under /api/ are denied without a session", () => {
     expect(decideAccess("/api/patients", null).allow).toBe(false);
   });
+
+  describe("MFA enrolment gate for privileged sessions", () => {
+    it("mfaPending sessions can only reach the security page, MFA APIs and logout", () => {
+      expect(decideAccess("/account/security", ["super_admin"], { mfaPending: true }).allow).toBe(true);
+      expect(decideAccess("/api/account/mfa/start", ["super_admin"], { mfaPending: true }).allow).toBe(true);
+      expect(decideAccess("/api/auth/logout", ["super_admin"], { mfaPending: true }).allow).toBe(true);
+      expect(decideAccess("/admin/doctors", ["super_admin"], { mfaPending: true })).toMatchObject({ allow: false, redirect: "/account/security" });
+      expect(decideAccess("/api/admin/doctors/x/decision", ["super_admin"], { mfaPending: true })).toMatchObject({ allow: false, status: 403 });
+      expect(decideAccess("/", ["super_admin"], { mfaPending: true }).allow).toBe(true);
+    });
+    it("non-pending sessions are unaffected; /account requires a session", () => {
+      expect(decideAccess("/admin/doctors", ["super_admin"], { mfaPending: false }).allow).toBe(true);
+      expect(decideAccess("/account/security", null).allow).toBe(false);
+      expect(decideAccess("/account/security", ["doctor"]).allow).toBe(true);
+    });
+  });
 });
