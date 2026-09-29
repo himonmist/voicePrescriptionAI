@@ -7,13 +7,13 @@ export type Permission =
   | "patient:read" | "patient:write" | "appointment:write" | "appointment:read"
   | "consultation:write" | "consultation:read" | "prescription:write" | "prescription:sign"
   | "prescription:read_own" | "appointment:book_own" | "report:read_own" | "consent:manage_own"
-  | "report:upload" | "usage:read_own";
+  | "report:upload" | "usage:read_own" | "drugref:manage";
 
 const P = (...p: Permission[]) => new Set<Permission>(p);
 
 /** Deny-by-default matrix. Super admin intentionally has NO clinical permissions (spec §3A). */
 export const ROLE_PERMISSIONS: Record<Role, Set<Permission>> = {
-  super_admin: P("doctor:verify", "org:manage", "user:manage", "plan:manage", "settings:manage", "audit:read", "cms:write", "ticket:manage", "payment:read", "refund:manage"),
+  super_admin: P("drugref:manage", "doctor:verify", "org:manage", "user:manage", "plan:manage", "settings:manage", "audit:read", "cms:write", "ticket:manage", "payment:read", "refund:manage"),
   org_admin: P("org:manage", "user:manage", "appointment:read", "usage:read_own", "audit:read"),
   doctor: P("patient:read", "patient:write", "appointment:read", "appointment:write", "consultation:read", "consultation:write", "prescription:write", "prescription:sign", "report:upload", "usage:read_own"),
   receptionist: P("patient:read", "patient:write", "appointment:read", "appointment:write"),

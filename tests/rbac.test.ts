@@ -31,6 +31,10 @@ describe("rbac", () => {
     expect(can(actor(["patient"]), "prescription:read_own")).toBe(true);
     expect(can(actor(["patient"]), "patient:read")).toBe(false);
   });
+  it("only super admin manages drug reference data (authorized sources), and it grants no clinical access", () => {
+    expect(can(actor(["super_admin"], null), "drugref:manage")).toBe(true);
+    for (const r of ["doctor", "org_admin", "receptionist", "patient", "support", "finance", "content_manager"] as const) expect(can(actor([r]), "drugref:manage")).toBe(false);
+  });
   it("assertCan throws ForbiddenError", () => {
     expect(() => assertCan(actor(["patient"]), "cms:write")).toThrow(ForbiddenError);
   });

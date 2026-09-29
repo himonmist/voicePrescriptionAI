@@ -343,3 +343,43 @@ export const clinicalNoteVersions = pgTable("clinical_note_versions", {
   summary: text("summary"),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("note_version_uq").on(t.noteId, t.version)]);
+
+/** Authorized drug reference data. NOTHING is bundled: an administrator imports data with its source, version, date and licence note. */
+export const drugReferenceSources = pgTable("drug_reference_sources", {
+  id: id(),
+  name: text("name").notNull(),
+  version: text("version").notNull(),
+  publishedAt: date("published_at", { mode: "string" }).notNull(),
+  licenceNote: text("licence_note").notNull(),
+  status: text("status").notNull().default("active"),
+  importedBy: uuid("imported_by").notNull().references(() => users.id),
+  importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+  drugCount: integer("drug_count").notNull().default(0),
+  interactionCount: integer("interaction_count").notNull().default(0),
+}, (t) => [uniqueIndex("drug_source_uq").on(t.name, t.version), index("drug_source_status_idx").on(t.status)]);
+
+export const drugReferences = pgTable("drug_references", {
+  id: id(),
+  sourceId: uuid("source_id").notNull().references(() => drugReferenceSources.id, { onDelete: "cascade" }),
+  genericName: text("generic_name").notNull(),
+  ingredients: jsonb("ingredients").$type<string[]>().notNull(),
+  brandNames: jsonb("brand_names").$type<string[]>().notNull().default([]),
+  drugClasses: jsonb("drug_classes").$type<string[]>().notNull().default([]),
+  strength: text("strength").notNull(),
+  dosageForm: text("dosage_form").notNull(),
+  route: text("route"),
+  highRisk: boolean("high_risk").notNull().default(false),
+  indications: text("indications"), contraindications: text("contraindications"), warnings: text("warnings"),
+  pediatricCaution: text("pediatric_caution"), pregnancyCaution: text("pregnancy_caution"), renalNote: text("renal_note"), hepaticNote: text("hepatic_note"),
+  searchText: text("search_text").notNull(),
+}, (t) => [index("drug_ref_source_idx").on(t.sourceId), index("drug_ref_generic_idx").on(t.genericName)]);
+
+export const drugInteractions = pgTable("drug_interactions", {
+  id: id(),
+  sourceId: uuid("source_id").notNull().references(() => drugReferenceSources.id, { onDelete: "cascade" }),
+  ingredientA: text("ingredient_a").notNull(),
+  ingredientB: text("ingredient_b").notNull(),
+  severity: text("severity").notNull(),
+  description: text("description").notNull(),
+  management: text("management"),
+}, (t) => [uniqueIndex("drug_ix_uq").on(t.sourceId, t.ingredientA, t.ingredientB), index("drug_ix_a_idx").on(t.ingredientA), index("drug_ix_b_idx").on(t.ingredientB)]);
