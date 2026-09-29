@@ -17,6 +17,7 @@ export interface AuthRepo {
   revokeSession(sessionId: string): Promise<void>;
   rolesFor(userId: string): Promise<Role[]>;
   /** Decrypted TOTP secret if MFA is enrolled, else null. */
+  primaryOrgFor(userId: string): Promise<string | null>;
   mfaSecretFor(userId: string): Promise<string | null>;
   audit(e: { action: string; actorId?: string | null; ip?: string; metadata?: Record<string, unknown> }): Promise<void>;
 }
@@ -83,7 +84,7 @@ export function createAuthService(repo: AuthRepo, limiter: { hit(key: string, li
       const roles = await repo.rolesFor(user.id);
       const expiresAt = new Date(Date.now() + SESSION_TTL_S * 1000);
       const sid = await repo.createSession({ userId: user.id, expiresAt, ip: ctx.ip });
-      const token = await signSession({ sub: user.id, roles, orgId: null, sid }, SESSION_TTL_S);
+      const token = await signSession({ sub: user.id, roles, orgId: await repo.primaryOrgFor(user.id), sid }, SESSION_TTL_S);
       await repo.audit({ action: "auth.login", actorId: user.id, ip: ctx.ip });
       return { ok: true, token, expiresAt, roles };
     },

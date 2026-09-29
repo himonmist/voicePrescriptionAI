@@ -28,6 +28,7 @@ export default async function DoctorDashboard() {
         {doc.status === "rejected" && doc.reviewNotes && <p className="mt-2 rounded bg-red-50 p-2 text-sm text-red-900">Reviewer note: {doc.reviewNotes}</p>}
         {(doc.status === "registered" || doc.status === "rejected") && <div className="mt-4"><SubmitVerification /></div>}
         {doc.status !== "active" && <p className="mt-4 text-sm text-slate-600">Clinical features stay locked until your account is verified and active.</p>}
+        {doc.status === "active" && <p className="mt-4"><a href="/doctor/patients" className="rounded bg-[var(--brand)] px-4 py-2 font-medium text-white">Patients</a></p>}
       </section>
     </main>
   );

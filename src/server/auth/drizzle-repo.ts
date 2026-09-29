@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import type { Db } from "@/db/types";
-import { auditEvents, doctorProfiles, sessions, userRoles, users } from "@/db/schema";
+import { auditEvents, doctorProfiles, organizationMemberships, sessions, userRoles, users } from "@/db/schema";
 import { decryptField } from "@/lib/security/crypto";
 import type { AuthRepo } from "./service";
 
@@ -42,6 +42,12 @@ export function drizzleAuthRepo(db: Db = getDb()): AuthRepo {
     },
     async revokeSession(id) { await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, id)); },
     async rolesFor(id) { return (await db.select({ role: userRoles.role }).from(userRoles).where(eq(userRoles.userId, id))).map((r) => r.role); },
+    async primaryOrgFor(id) {
+      const [m] = await db.select({ o: organizationMemberships.organizationId }).from(organizationMemberships).where(eq(organizationMemberships.userId, id)).orderBy(organizationMemberships.createdAt).limit(1);
+      if (m) return m.o;
+      const [d] = await db.select({ o: doctorProfiles.organizationId }).from(doctorProfiles).where(eq(doctorProfiles.userId, id)).limit(1);
+      return d?.o ?? null;
+    },
     async mfaSecretFor(id) {
       const [r] = await db.select({ enc: users.mfaSecretEnc, at: users.mfaEnabledAt }).from(users).where(eq(users.id, id)).limit(1);
       return r?.enc && r.at ? decryptField(r.enc) : null;

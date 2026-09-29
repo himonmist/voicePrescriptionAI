@@ -13,6 +13,7 @@ function fakeRepo() {
   const audit: { action: string; actorId?: string | null }[] = [];
   const doctors: { userId: string; status: string }[] = [];
   const mfa = new Map<string, string>();
+  const orgs = new Map<string, string>();
   const repo: AuthRepo = {
     async findUserByEmail(e) { return users.find((u) => u.email === e) ?? null; },
     async createUser(u) { const row = { ...u, id: `u${users.length + 1}`, failedLogins: 0, lockedUntil: null, disabledAt: null, roles: u.roles }; users.push(row); return row; },
@@ -23,10 +24,11 @@ function fakeRepo() {
     async isSessionActive(id) { const s = sessions.get(id); return !!s && !s.revoked && s.expiresAt > new Date(); },
     async revokeSession(id) { const s = sessions.get(id); if (s) s.revoked = true; },
     async rolesFor(id) { return users.find((u) => u.id === id)!.roles; },
+    async primaryOrgFor(id) { return orgs.get(id) ?? null; },
     async mfaSecretFor(id) { return mfa.get(id) ?? null; },
     async audit(e) { audit.push(e); },
   };
-  return { repo, users, doctors, audit, sessions, mfa };
+  return { repo, users, doctors, audit, sessions, mfa, orgs };
 }
 
 describe("auth service", () => {
@@ -94,6 +96,14 @@ describe("auth service", () => {
     expect(await svc.authenticate(r.token)).not.toBeNull();
     await svc.logout(r.token);
     expect(await svc.authenticate(r.token)).toBeNull();
+  });
+
+  it("puts the user's organization into the session actor (tenant scoping)", async () => {
+    await svc.registerPatient({ fullName: "A B", email: "o@x.com", phone: "01712345678", password: "Correct-Horse-9!" });
+    f.orgs.set("u1", "org-123");
+    const r = await svc.login({ email: "o@x.com", password: "Correct-Horse-9!" }, { ip: "1" });
+    if (!r.ok) throw new Error("login failed");
+    expect((await svc.authenticate(r.token))?.orgId).toBe("org-123");
   });
 
   describe("MFA", () => {

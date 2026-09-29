@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, timestamp, boolean, integer, jsonb, uniqueIndex, index, pgEnum, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, boolean, integer, jsonb, uniqueIndex, index, pgEnum, primaryKey, date } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const id = () => uuid("id").primaryKey().defaultRandom();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -121,3 +122,82 @@ export const notifications = pgTable("notifications", {
   createdAt: createdAt(),
   readAt: timestamp("read_at", { withTimezone: true }),
 }, (t) => [index("notif_user_idx").on(t.userId, t.createdAt), index("notif_status_idx").on(t.status)]);
+
+/** PHI notes: phone/email/address/emergency contact are AES-GCM encrypted (`*_enc`); phone is matched via keyed blind index `phone_idx`. */
+export const patients = pgTable("patients", {
+  id: id(),
+  organizationId: uuid("organization_id").references(() => organizations.id),
+  patientCode: text("patient_code").notNull(),
+  fullName: text("full_name").notNull(),
+  fullNameNorm: text("full_name_norm").notNull(),
+  dob: date("dob", { mode: "string" }).notNull(),
+  sex: text("sex").notNull().default("unknown"),
+  phoneEnc: text("phone_enc"),
+  phoneIdx: text("phone_idx"),
+  emailEnc: text("email_enc"),
+  addressEnc: text("address_enc"),
+  emergencyContactEnc: text("emergency_contact_enc"),
+  userId: uuid("user_id").references(() => users.id),
+  status: text("status").notNull().default("active"),
+  mergedIntoId: uuid("merged_into_id"),
+  isTest: boolean("is_test").notNull().default(false),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: createdAt(), updatedAt: updatedAt(),
+}, (t) => [
+  uniqueIndex("patients_code_uq").on(t.patientCode),
+  uniqueIndex("patients_user_uq").on(t.userId),
+  index("patients_org_name_idx").on(t.organizationId, t.fullNameNorm),
+  index("patients_phone_idx").on(t.phoneIdx),
+  index("patients_dob_idx").on(t.dob),
+]);
+
+export const patientDoctorRelationships = pgTable("patient_doctor_relationships", {
+  id: id(),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  doctorUserId: uuid("doctor_user_id").notNull().references(() => users.id),
+  kind: text("kind").notNull(),
+  reason: text("reason"),
+  grantedBy: uuid("granted_by").notNull().references(() => users.id),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  revokedBy: uuid("revoked_by").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => [
+  uniqueIndex("pdr_active_uq").on(t.patientId, t.doctorUserId).where(sql`${t.revokedAt} IS NULL`),
+  index("pdr_doctor_idx").on(t.doctorUserId),
+]);
+
+/** Consent history: append-only. The current state per kind is the newest row. */
+export const patientConsents = pgTable("patient_consents", {
+  id: id(),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  granted: boolean("granted").notNull(),
+  method: text("method").notNull(),
+  policyVersion: text("policy_version").notNull(),
+  capturedBy: uuid("captured_by").notNull().references(() => users.id),
+  note: text("note"),
+  createdAt: createdAt(),
+}, (t) => [index("consent_patient_kind_idx").on(t.patientId, t.kind, t.createdAt)]);
+
+/** Allergies, conditions, medications, immunizations, family history. No hard deletes: use status + reason. */
+export const patientClinicalItems = pgTable("patient_clinical_items", {
+  id: id(),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  descriptionEnc: text("description_enc").notNull(),
+  severity: text("severity"),
+  status: text("status").notNull().default("active"),
+  statusReason: text("status_reason"),
+  recordedBy: uuid("recorded_by").notNull().references(() => users.id),
+  createdAt: createdAt(), updatedAt: updatedAt(),
+}, (t) => [index("pci_patient_kind_idx").on(t.patientId, t.kind)]);
+
+export const patientMerges = pgTable("patient_merges", {
+  id: id(),
+  sourceId: uuid("source_id").notNull().references(() => patients.id),
+  targetId: uuid("target_id").notNull().references(() => patients.id),
+  mergedBy: uuid("merged_by").notNull().references(() => users.id),
+  reason: text("reason").notNull(),
+  createdAt: createdAt(),
+});
