@@ -10,7 +10,7 @@ export default function Home() {
         SmartDoctorAid helps doctors prepare prescription drafts, clinical notes, and medical summaries using AI-powered voice documentation in Bangla, English, and mixed-language consultations. The treating doctor reviews, edits and signs every prescription.
       </p>
       <div className="mt-8 flex gap-3">
-        <Link href="/login" className="rounded-md bg-[var(--brand)] px-5 py-3 font-medium text-white">Start Free Trial</Link>
+        <Link href="/register/doctor" className="rounded-md bg-[var(--brand)] px-5 py-3 font-medium text-white">Start Free Trial</Link>
         <Link href="/login" className="rounded-md border border-slate-300 px-5 py-3 font-medium">Log in</Link>
       </div>
     </main>

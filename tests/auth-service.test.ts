@@ -3,6 +3,7 @@ import { createAuthService, type AuthRepo, type UserRow } from "@/server/auth/se
 import { hashPassword } from "@/lib/security/password";
 import { MemoryRateLimiter } from "@/lib/security/rate-limit";
 import type { Role } from "@/lib/security/rbac";
+import { generateSecret, generateTotp } from "@/lib/security/totp";
 
 beforeAll(() => { process.env.AUTH_SECRET = "test-secret-test-secret-test-secret-32+"; });
 
@@ -11,6 +12,7 @@ function fakeRepo() {
   const sessions = new Map<string, { userId: string; revoked: boolean; expiresAt: Date }>();
   const audit: { action: string; actorId?: string | null }[] = [];
   const doctors: { userId: string; status: string }[] = [];
+  const mfa = new Map<string, string>();
   const repo: AuthRepo = {
     async findUserByEmail(e) { return users.find((u) => u.email === e) ?? null; },
     async createUser(u) { const row = { ...u, id: `u${users.length + 1}`, failedLogins: 0, lockedUntil: null, disabledAt: null, roles: u.roles }; users.push(row); return row; },
@@ -21,9 +23,10 @@ function fakeRepo() {
     async isSessionActive(id) { const s = sessions.get(id); return !!s && !s.revoked && s.expiresAt > new Date(); },
     async revokeSession(id) { const s = sessions.get(id); if (s) s.revoked = true; },
     async rolesFor(id) { return users.find((u) => u.id === id)!.roles; },
+    async mfaSecretFor(id) { return mfa.get(id) ?? null; },
     async audit(e) { audit.push(e); },
   };
-  return { repo, users, doctors, audit, sessions };
+  return { repo, users, doctors, audit, sessions, mfa };
 }
 
 describe("auth service", () => {
@@ -91,5 +94,25 @@ describe("auth service", () => {
     expect(await svc.authenticate(r.token)).not.toBeNull();
     await svc.logout(r.token);
     expect(await svc.authenticate(r.token)).toBeNull();
+  });
+
+  describe("MFA", () => {
+    it("requires a TOTP code when MFA is enrolled", async () => {
+      await svc.registerPatient({ fullName: "A B", email: "m@x.com", phone: "01712345678", password: "Correct-Horse-9!" });
+      const secret = generateSecret(); f.mfa.set("u1", secret);
+      const no = await svc.login({ email: "m@x.com", password: "Correct-Horse-9!" }, { ip: "1" });
+      expect(no).toMatchObject({ ok: false, mfaRequired: true });
+      const bad = await svc.login({ email: "m@x.com", password: "Correct-Horse-9!", totp: "000000" }, { ip: "1" });
+      expect(bad.ok).toBe(false);
+      const good = await svc.login({ email: "m@x.com", password: "Correct-Horse-9!", totp: generateTotp(secret, Date.now()) }, { ip: "1" });
+      expect(good.ok).toBe(true);
+    });
+    it("does not reveal MFA status for wrong passwords", async () => {
+      await svc.registerPatient({ fullName: "A B", email: "m@x.com", phone: "01712345678", password: "Correct-Horse-9!" });
+      f.mfa.set("u1", generateSecret());
+      const r = await svc.login({ email: "m@x.com", password: "wrong-pass-1AAA" }, { ip: "1" });
+      expect(r).toMatchObject({ ok: false, status: 401 });
+      expect((r as any).mfaRequired).toBeUndefined();
+    });
   });
 });

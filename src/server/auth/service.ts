@@ -1,7 +1,8 @@
 import { hashPassword, verifyPassword, validatePasswordPolicy } from "@/lib/security/password";
 import { signSession, verifySession } from "@/lib/security/session";
-import type { MemoryRateLimiter } from "@/lib/security/rate-limit";
+import type { RateResult } from "@/lib/security/rate-limit";
 import type { Actor, Role } from "@/lib/security/rbac";
+import { verifyTotp } from "@/lib/security/totp";
 import { loginSchema, registerDoctorSchema, registerPatientSchema } from "@/lib/validation/auth";
 
 export interface UserRow { id: string; email: string; passwordHash: string; failedLogins: number; lockedUntil: Date | null; disabledAt: Date | null }
@@ -15,16 +16,18 @@ export interface AuthRepo {
   isSessionActive(sessionId: string): Promise<boolean>;
   revokeSession(sessionId: string): Promise<void>;
   rolesFor(userId: string): Promise<Role[]>;
+  /** Decrypted TOTP secret if MFA is enrolled, else null. */
+  mfaSecretFor(userId: string): Promise<string | null>;
   audit(e: { action: string; actorId?: string | null; ip?: string; metadata?: Record<string, unknown> }): Promise<void>;
 }
 
-type Fail = { ok: false; status: number; error: string };
+type Fail = { ok: false; status: number; error: string; mfaRequired?: boolean };
 type LoginOk = { ok: true; token: string; expiresAt: Date };
 const GENERIC = { ok: false, status: 401, error: "Invalid email or password" } as const;
 const SESSION_TTL_S = 60 * 60 * 8;
 const LOGIN_LIMIT = { max: 10, windowMs: 15 * 60_000 };
 
-export function createAuthService(repo: AuthRepo, limiter: Pick<MemoryRateLimiter, "hit">) {
+export function createAuthService(repo: AuthRepo, limiter: { hit(key: string, limit: number, windowMs: number): RateResult | Promise<RateResult> }) {
   async function register(base: { fullName: string; email: string; phone: string; password: string }, roles: Role[], after?: (userId: string) => Promise<void>): Promise<{ ok: true; userId: string } | Fail> {
     const pol = validatePasswordPolicy(base.password);
     if (!pol.ok) return { ok: false, status: 422, error: pol.reason! };
@@ -48,7 +51,7 @@ export function createAuthService(repo: AuthRepo, limiter: Pick<MemoryRateLimite
     },
 
     async login(input: unknown, ctx: { ip: string }): Promise<LoginOk | Fail> {
-      const rl = limiter.hit(`login:${ctx.ip}`, LOGIN_LIMIT.max, LOGIN_LIMIT.windowMs);
+      const rl = await limiter.hit(`login:${ctx.ip}`, LOGIN_LIMIT.max, LOGIN_LIMIT.windowMs);
       if (!rl.allowed) return { ok: false, status: 429, error: "Too many attempts. Try again later." };
       const p = loginSchema.safeParse(input);
       if (!p.success) return { ...GENERIC };
@@ -65,6 +68,16 @@ export function createAuthService(repo: AuthRepo, limiter: Pick<MemoryRateLimite
         await repo.recordFailedLogin(user.id);
         await repo.audit({ action: "auth.login_failed", actorId: user.id, ip: ctx.ip });
         return { ...GENERIC };
+      }
+      const mfaSecret = await repo.mfaSecretFor(user.id);
+      if (mfaSecret) {
+        // Reached only after the password is proven, so this does not leak MFA status.
+        if (!p.data.totp) return { ok: false, status: 401, error: "Verification code required", mfaRequired: true };
+        if (!verifyTotp(mfaSecret, p.data.totp, Date.now())) {
+          await repo.recordFailedLogin(user.id);
+          await repo.audit({ action: "auth.mfa_failed", actorId: user.id, ip: ctx.ip });
+          return { ...GENERIC };
+        }
       }
       await repo.resetFailedLogins(user.id);
       const roles = await repo.rolesFor(user.id);
