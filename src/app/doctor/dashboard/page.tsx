@@ -27,8 +27,8 @@ export default async function DoctorDashboard() {
         <p className="mt-2 text-slate-700">{COPY[doc.status]}</p>
         {doc.status === "rejected" && doc.reviewNotes && <p className="mt-2 rounded bg-red-50 p-2 text-sm text-red-900">Reviewer note: {doc.reviewNotes}</p>}
         {(doc.status === "registered" || doc.status === "rejected") && <div className="mt-4"><SubmitVerification /></div>}
-        {doc.status !== "active" && <p className="mt-4 text-sm text-slate-600">Clinical features stay locked until your account is verified and active.</p>}
-        {doc.status === "active" && <p className="mt-4"><a href="/doctor/patients" className="rounded bg-[var(--brand)] px-4 py-2 font-medium text-white">Patients</a></p>}
+        {doc.status !== "active" && <p className="mt-4 text-sm text-slate-600">Clinical features stay locked until your account is verified and active. You can prepare your schedule and public profile in the meantime: <a className="underline" href="/doctor/schedule">Schedule</a> · <a className="underline" href="/doctor/settings">Public profile</a>.</p>}
+        {doc.status === "active" && <nav aria-label="Doctor tools" className="mt-4 flex flex-wrap gap-2 text-sm font-medium">{[["/doctor/appointments", "Appointments"], ["/doctor/patients", "Patients"], ["/doctor/schedule", "Schedule"], ["/doctor/settings", "Public profile"]].map(([h, l]) => <a key={h} href={h} className="rounded bg-[var(--brand)] px-4 py-2 text-white">{l}</a>)}</nav>}
       </section>
     </main>
   );

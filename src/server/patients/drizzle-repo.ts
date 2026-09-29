@@ -1,4 +1,3 @@
-import { randomInt } from "node:crypto";
 import { and, desc, eq, inArray, isNull, or, gt, like, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import type { Db } from "@/db/types";
@@ -6,11 +5,11 @@ import { auditEvents, doctorProfiles, patientClinicalItems, patientConsents, pat
 import { decryptField, encryptField } from "@/lib/security/crypto";
 import { normalizeName, normalizePhone, phoneBlindIndex } from "@/lib/security/pii";
 import { ConflictError } from "@/server/errors";
+import { newPatientCode } from "./code";
 import type { PatientRecord, PatientRepo, Scope } from "./service";
 import type { Relationship } from "./access";
 
-const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const newCode = () => "SDA-" + Array.from({ length: 8 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join("");
+const newCode = newPatientCode;
 const enc = (v?: string | null) => (v ? encryptField(v) : null);
 const dec = (v?: string | null) => (v ? decryptField(v) : null);
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => "\\" + c);

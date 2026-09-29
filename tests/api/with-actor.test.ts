@@ -33,6 +33,8 @@ describe("withActor", () => {
     expect((await run(new ValidationError("bad"))).status).toBe(422);
     const c = await run(new ConflictError("dup", [{ id: "1" }])); expect(c.status).toBe(409);
     expect((await c.json()).duplicates).toEqual([{ id: "1" }]);
+    const plain = await run(new ConflictError("slot taken")); expect(plain.status).toBe(409);
+    expect(await plain.json()).toEqual({ error: "slot taken" }); // no empty duplicates noise
   });
   it("hides internals on unexpected errors", async () => {
     getActor.mockResolvedValue(actor);

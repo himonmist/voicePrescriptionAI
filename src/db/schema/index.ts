@@ -73,6 +73,11 @@ export const doctorProfiles = pgTable("doctor_profiles", {
   reviewedBy: uuid("reviewed_by").references(() => users.id),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   publicProfile: boolean("public_profile").notNull().default(false),
+  consultationFeeBdt: integer("consultation_fee_bdt"),
+  bio: text("bio"),
+  languages: jsonb("languages").$type<string[]>().notNull().default([]),
+  chamberAddress: text("chamber_address"),
+  consultationMode: text("consultation_mode").notNull().default("both"),
   createdAt: createdAt(), updatedAt: updatedAt(),
 }, (t) => [uniqueIndex("doctor_user_uq").on(t.userId), uniqueIndex("doctor_bmdc_uq").on(t.bmdcNumber), index("doctor_status_idx").on(t.status)]);
 
@@ -210,3 +215,59 @@ export const userRecoveryCodes = pgTable("user_recovery_codes", {
   usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("recovery_user_hash_uq").on(t.userId, t.codeHash)]);
+
+/** Weekly working sessions (local Asia/Dhaka wall-clock). Several rows per weekday = several sessions. */
+export const availabilitySchedules = pgTable("availability_schedules", {
+  id: id(),
+  doctorUserId: uuid("doctor_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  weekday: integer("weekday").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  slotMinutes: integer("slot_minutes").notNull(),
+  bufferMinutes: integer("buffer_minutes").notNull().default(0),
+  mode: text("mode").notNull().default("both"),
+  location: text("location"),
+  maxPerDay: integer("max_per_day"),
+  validFrom: date("valid_from", { mode: "string" }),
+  validTo: date("valid_to", { mode: "string" }),
+  createdAt: createdAt(),
+}, (t) => [index("avail_doctor_idx").on(t.doctorUserId, t.weekday)]);
+
+export const availabilityExceptions = pgTable("availability_exceptions", {
+  id: id(),
+  doctorUserId: uuid("doctor_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  date: date("date", { mode: "string" }).notNull(),
+  kind: text("kind").notNull(),
+  startTime: text("start_time"),
+  endTime: text("end_time"),
+  reason: text("reason"),
+  createdAt: createdAt(),
+}, (t) => [index("avail_ex_doctor_idx").on(t.doctorUserId, t.date)]);
+
+/** Overlap prevention is enforced by EXCLUDE constraints (migration 0006), not just application code. */
+export const appointments = pgTable("appointments", {
+  id: id(),
+  doctorUserId: uuid("doctor_user_id").notNull().references(() => users.id),
+  patientId: uuid("patient_id").notNull().references(() => patients.id),
+  organizationId: uuid("organization_id").references(() => organizations.id),
+  startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+  endAt: timestamp("end_at", { withTimezone: true }).notNull(),
+  mode: text("mode").notNull(),
+  location: text("location"),
+  status: text("status").notNull().default("booked"),
+  reasonEnc: text("reason_enc"),
+  bookedBy: uuid("booked_by").notNull().references(() => users.id),
+  bookedVia: text("booked_via").notNull(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledBy: uuid("cancelled_by").references(() => users.id),
+  cancelReason: text("cancel_reason"),
+  checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: createdAt(), updatedAt: updatedAt(),
+}, (t) => [
+  index("appt_doctor_start_idx").on(t.doctorUserId, t.startAt),
+  index("appt_patient_start_idx").on(t.patientId, t.startAt),
+  index("appt_org_start_idx").on(t.organizationId, t.startAt),
+  index("appt_status_idx").on(t.status),
+]);

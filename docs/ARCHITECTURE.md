@@ -36,6 +36,16 @@ Single source of truth: `src/server/patients/access.ts` (`accessLevel`), deny by
 - Clinical items are never deleted — resolved / entered-in-error with a reason. Consent is an append-only history; absence of a record means no consent (`hasActiveConsent` is the gate the consultation module must use before recording).
 - Not built yet: break-glass emergency access (needs reason + second approver + expiry), patient data export, retention/deletion workflow.
 
+## Appointments (M5)
+- **Time:** stored as UTC instants; working hours are Asia/Dhaka wall-clock (UTC+6, no DST — fixed offset is exact). Other time zones are not supported yet.
+- **Slot engine** (`src/server/appointments/slots.ts`) is pure. The booking service re-derives the offered slots server-side and accepts only an exact offered start; the end time is always computed by the server. Clients cannot invent times.
+- **No double booking:** Postgres `EXCLUDE USING gist` constraints (migration 0006, needs `btree_gist`) reject overlapping active appointments for the same doctor **and** for the same patient. The service maps SQLSTATE `23P01` to a 409. Tested with 12 simultaneous requests for one slot: exactly one succeeds.
+- **Policy:** patients may cancel/reschedule online until 2 h before start (`PATIENT_CANCEL_CUTOFF_HOURS`); doctors/reception may cancel any time with a reason. Check-in only on the day; no-show only after the start time.
+- **Access:** patient sees own, doctor sees own, receptionist sees own organization (without visit reasons). Booking creates the patient–doctor relationship so the doctor can open the record.
+- **Public surface:** `/api/public/*` is rate limited per IP (120/min) and lists only `active` + opted-in doctors with no contact details.
+- Editing a schedule never cancels existing appointments.
+- Visit reason is encrypted; if it cannot be decrypted it shows as unavailable rather than failing the list. Clinical fields deliberately do NOT have this tolerance.
+
 ## Testing
 - `npm test` runs unit + API-handler tests. Integration tests (`tests/integration`) run against a real Postgres when `TEST_DATABASE_URL` is set (CI uses a `postgres:17` service container; locally any throwaway DB) and are skipped otherwise. They apply the real migrations and cover: unique constraints, transactional rollback, atomic lockout counter, append-only audit trigger, DB rate limiter under concurrency, verification workflow with concurrent decisions.
 - The DB client uses the Neon serverless driver for `*.neon.tech` hosts and node-postgres otherwise, so the app runs locally without Neon.
