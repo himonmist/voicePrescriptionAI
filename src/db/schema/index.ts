@@ -93,3 +93,31 @@ export const rateLimits = pgTable("rate_limits", {
   count: integer("count").notNull(),
   windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
 });
+
+export const credentialStatusEnum = pgEnum("credential_status", ["pending", "verified", "rejected", "expired"]);
+
+/** Uploaded credential evidence (BMDC certificate, degree). `storageKey` points to private object storage; never a public URL. */
+export const doctorCredentials = pgTable("doctor_credentials", {
+  id: id(),
+  doctorId: uuid("doctor_id").notNull().references(() => doctorProfiles.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  storageKey: text("storage_key").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  status: credentialStatusEnum("status").notNull().default("pending"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  reviewNotes: text("review_notes"),
+  createdAt: createdAt(),
+}, (t) => [index("cred_doctor_idx").on(t.doctorId), index("cred_expiry_idx").on(t.expiresAt)]);
+
+/** In-app notification/outbox. Delivery channels (email/SMS/WhatsApp) consume `status='queued'` rows in a later milestone. */
+export const notifications = pgTable("notifications", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  channel: text("channel").notNull().default("in_app"),
+  status: text("status").notNull().default("queued"),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: createdAt(),
+  readAt: timestamp("read_at", { withTimezone: true }),
+}, (t) => [index("notif_user_idx").on(t.userId, t.createdAt), index("notif_status_idx").on(t.status)]);

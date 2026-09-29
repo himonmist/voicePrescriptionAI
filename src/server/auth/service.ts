@@ -22,7 +22,7 @@ export interface AuthRepo {
 }
 
 type Fail = { ok: false; status: number; error: string; mfaRequired?: boolean };
-type LoginOk = { ok: true; token: string; expiresAt: Date };
+type LoginOk = { ok: true; token: string; expiresAt: Date; roles: Role[] };
 const GENERIC = { ok: false, status: 401, error: "Invalid email or password" } as const;
 const SESSION_TTL_S = 60 * 60 * 8;
 const LOGIN_LIMIT = { max: 10, windowMs: 15 * 60_000 };
@@ -85,7 +85,7 @@ export function createAuthService(repo: AuthRepo, limiter: { hit(key: string, li
       const sid = await repo.createSession({ userId: user.id, expiresAt, ip: ctx.ip });
       const token = await signSession({ sub: user.id, roles, orgId: null, sid }, SESSION_TTL_S);
       await repo.audit({ action: "auth.login", actorId: user.id, ip: ctx.ip });
-      return { ok: true, token, expiresAt };
+      return { ok: true, token, expiresAt, roles };
     },
 
     /** Verifies signature AND that the server-side session is still active (revocation). */

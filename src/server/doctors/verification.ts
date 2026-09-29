@@ -14,11 +14,15 @@ const TRANSITIONS: Record<DoctorStatus, DoctorStatus[]> = {
 
 export const canTransition = (from: DoctorStatus, to: DoctorStatus) => TRANSITIONS[from]?.includes(to) ?? false;
 
+export interface TransitionInput { doctorId: string; from: DoctorStatus; to: DoctorStatus; actorId: string; notes?: string; notifyKind?: string }
+
 export interface VerificationRepo {
   getStatus(doctorId: string): Promise<DoctorStatus | null>;
-  setStatus(doctorId: string, status: DoctorStatus, reviewerId: string, notes?: string): Promise<void>;
-  audit(e: { action: string; actorId: string; resourceType: string; resourceId: string; metadata?: Record<string, unknown> }): Promise<void>;
-  notify(doctorId: string, kind: string): Promise<void>;
+  /**
+   * Atomically: update status only if it is still `from` (optimistic guard), write the audit event,
+   * and enqueue the notification. Must throw if the guard fails (concurrent change).
+   */
+  transition(input: TransitionInput): Promise<void>;
 }
 
 const NOTIFY: Partial<Record<DoctorStatus, string>> = { under_review: "doctor_under_review", approved: "doctor_approved", rejected: "doctor_rejected", suspended: "doctor_suspended", active: "doctor_activated" };
@@ -28,9 +32,7 @@ export function createVerificationService(repo: VerificationRepo) {
     const from = await repo.getStatus(doctorId);
     if (!from) throw new Error("Doctor not found");
     if (!canTransition(from, to)) throw new Error(`Illegal transition ${from} -> ${to}`);
-    await repo.setStatus(doctorId, to, actor.userId, notes);
-    await repo.audit({ action: "doctor.status_changed", actorId: actor.userId, resourceType: "doctor_profile", resourceId: doctorId, metadata: { from, to } });
-    const kind = NOTIFY[to]; if (kind) await repo.notify(doctorId, kind);
+    await repo.transition({ doctorId, from, to, actorId: actor.userId, notes, notifyKind: NOTIFY[to] });
   }
   return {
     /** The doctor submitting their own credentials. Ownership is enforced by the caller resolving doctorId from the actor. */

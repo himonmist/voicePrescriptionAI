@@ -1,12 +1,13 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import type { Db } from "@/db/types";
 import { auditEvents, doctorProfiles, sessions, userRoles, users } from "@/db/schema";
 import { decryptField } from "@/lib/security/crypto";
 import type { AuthRepo } from "./service";
 
 const MAX_FAILS = 5, LOCK_MS = 15 * 60_000;
 
-export function drizzleAuthRepo(db = getDb()): AuthRepo {
+export function drizzleAuthRepo(db: Db = getDb()): AuthRepo {
   return {
     async findUserByEmail(email) {
       const [u] = await db.select().from(users).where(eq(users.email, email)).limit(1);

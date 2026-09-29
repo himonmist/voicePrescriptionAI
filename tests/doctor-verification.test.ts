@@ -30,9 +30,12 @@ function repo() {
   const notes: string[] = [];
   const r: VerificationRepo = {
     async getStatus(id) { return rows.get(id)?.status ?? null; },
-    async setStatus(id, status, by, n) { rows.set(id, { status, notes: n }); },
-    async audit(e) { audit.push(e); },
-    async notify(_id, kind) { notes.push(kind); },
+    async transition(i) {
+      if (rows.get(i.doctorId)?.status !== i.from) throw new Error("concurrent");
+      rows.set(i.doctorId, { status: i.to, notes: i.notes });
+      audit.push({ action: "doctor.status_changed", metadata: { from: i.from, to: i.to } });
+      if (i.notifyKind) notes.push(i.notifyKind);
+    },
   };
   return { r, rows, audit, notes };
 }
