@@ -27,7 +27,7 @@ const sectionSchema = z.object({
 });
 
 const num = (min: number, max: number) => z.number().min(min).max(max).optional();
-const vitalsSchema = z.object({
+export const vitalsSchema = z.object({
   bpSystolic: num(40, 300), bpDiastolic: num(20, 200), pulse: num(20, 300), respRate: num(4, 80),
   tempC: num(30, 45), spo2: num(50, 100), weightKg: num(0.3, 500), heightCm: num(20, 260),
 }).strict().refine((v) => v.bpSystolic === undefined || v.bpDiastolic === undefined || v.bpSystolic > v.bpDiastolic, "Systolic pressure must be higher than diastolic");

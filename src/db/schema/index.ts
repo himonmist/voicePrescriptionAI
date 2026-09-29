@@ -383,3 +383,48 @@ export const drugInteractions = pgTable("drug_interactions", {
   description: text("description").notNull(),
   management: text("management"),
 }, (t) => [uniqueIndex("drug_ix_uq").on(t.sourceId, t.ingredientA, t.ingredientB), index("drug_ix_a_idx").on(t.ingredientA), index("drug_ix_b_idx").on(t.ingredientB)]);
+
+/**
+ * A prescription row is only the lifecycle envelope; content lives in immutable, encrypted versions.
+ * DB triggers (migration 0011) make finalized rows tamper-proof and versions append-only.
+ * At most one LIVE (draft/approved/finalized) prescription per consultation; amendments supersede the old one.
+ */
+export const prescriptions = pgTable("prescriptions", {
+  id: id(),
+  code: text("code").notNull(),
+  consultationId: uuid("consultation_id").notNull().references(() => consultations.id),
+  patientId: uuid("patient_id").notNull().references(() => patients.id),
+  doctorUserId: uuid("doctor_user_id").notNull().references(() => users.id),
+  organizationId: uuid("organization_id").references(() => organizations.id),
+  status: text("status").notNull().default("draft"),
+  currentVersion: integer("current_version").notNull().default(1),
+  supersedesId: uuid("supersedes_id"),
+  supersededById: uuid("superseded_by_id"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+  finalVersion: integer("final_version"),
+  contentHash: text("content_hash"),
+  seal: text("seal"),
+  amendReason: text("amend_reason"),
+  supersededAt: timestamp("superseded_at", { withTimezone: true }),
+  cancelReason: text("cancel_reason"),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledBy: uuid("cancelled_by").references(() => users.id),
+  createdAt: createdAt(), updatedAt: updatedAt(),
+}, (t) => [
+  uniqueIndex("rx_code_uq").on(t.code),
+  uniqueIndex("rx_live_consult_uq").on(t.consultationId).where(sql`${t.status} IN ('draft','approved','finalized')`),
+  index("rx_patient_idx").on(t.patientId, t.createdAt),
+  index("rx_doctor_idx").on(t.doctorUserId, t.createdAt),
+]);
+
+export const prescriptionVersions = pgTable("prescription_versions", {
+  id: id(),
+  prescriptionId: uuid("prescription_id").notNull().references(() => prescriptions.id),
+  version: integer("version").notNull(),
+  kind: text("kind").notNull(),
+  contentEnc: text("content_enc").notNull(),
+  authorId: uuid("author_id").notNull().references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("rx_version_uq").on(t.prescriptionId, t.version)]);
