@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { StartPrescription } from "@/components/StartPrescription";
 import { SECTION_KEYS, SECTION_LABELS, type NoteContent, type SectionKey, type Vitals } from "@/server/consultations/note";
 
 interface Seg { id: string; seq: number; speaker: string; text: string; originalText: string | null; startMs?: number | null; flagged: boolean }
@@ -124,6 +125,7 @@ export function ConsultationWorkspace(p: Props) {
         <div className="mt-4 flex flex-wrap gap-2">
           <button onClick={save} disabled={busy || (approved && amend.trim().length < 10)} className="rounded bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{busy ? "Saving…" : approved ? "Save amendment" : "Save draft"}</button>
           {!approved && version > 0 && <button onClick={approve} className="rounded border px-4 py-2 text-sm font-medium">Approve note</button>}
+          <StartPrescription consultationId={p.id} />
           {!p.completed && <button onClick={complete} className="rounded border border-slate-900 px-4 py-2 text-sm font-medium">Complete consultation</button>}
         </div>
       </section>

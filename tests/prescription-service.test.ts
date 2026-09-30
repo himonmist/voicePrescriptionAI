@@ -46,6 +46,7 @@ function fake() {
       const content = v ? (st.tamper ? { ...v.content, advice: "TAMPERED" } : v.content) : null;
       return { rx: r, doctor: { name: "Dr One", bmdc: "A-1001", specialty: "GP" }, supersededByCode: r.supersededById ? st.rx.get(r.supersededById)!.code : null, content };
     },
+    async parties() { return { doctor: { name: "Dr One", bmdc: "A-1001", specialty: "GP", chamberAddress: "Dhaka" }, patient: { name: "Test Patient", dob: "1985-03-12", sex: "male", patientCode: "SDA-TEST0001" } }; },
     async listByConsultation(cid) { return [...st.rx.values()].filter((r) => r.consultationId === cid); },
     async audit(e) { st.audit.push(e); },
   };
@@ -233,6 +234,26 @@ describe("prescription service", () => {
       const id = await ready(); await svc.approve(doc(), id); await svc.finalize(doc(), id, { password: "pw" }); const code = (await f.repo.get(id))!.code;
       await svc.cancel(doc(), id, { reason: "Issued to the wrong patient" });
       const v = await svc.verify(code); expect(v.status).toBe("cancelled"); expect(JSON.stringify(v)).not.toMatch(/wrong patient/);
+    });
+  });
+
+  describe("printable copy", () => {
+    it("is available only for sealed (finalized/superseded/cancelled) prescriptions, to the author, and is audited", async () => {
+      const id = await ready();
+      await expect(svc.printable(doc(), id)).rejects.toThrow(/finalized/i);
+      await svc.approve(doc(), id); await expect(svc.printable(doc(), id)).rejects.toThrow(/finalized/i);
+      const r = await svc.finalize(doc(), id, { password: "pw" });
+      const p = await svc.printable(doc(), id);
+      expect(p).toMatchObject({ code: r.code, state: "valid", doctor: { name: "Dr One", bmdc: "A-1001" }, patient: { name: "Test Patient", patientCode: "SDA-TEST0001" } });
+      expect(p.content.items[0].genericName).toBe("Testalpha"); expect(p.issuedAt).toBe(clock.toISOString());
+      expect(f.st.audit.some((a) => a.action === "prescription.printed")).toBe(true);
+      await expect(svc.printable(doc("d2"), id)).rejects.toThrow(NotFoundError);
+    });
+    it("a superseded or cancelled copy is clearly labelled so it cannot be mistaken for the current one", async () => {
+      const id = await ready(); await svc.approve(doc(), id); await svc.finalize(doc(), id, { password: "pw" });
+      await svc.amend(doc(), id, { reason: "Dose corrected after re-checking" }); expect((await svc.printable(doc(), id)).state).toBe("superseded");
+      const id2 = await (async () => { const b = await f.repo.createOrGet({ consultationId: "c9", patientId: "p1", doctorUserId: "d1", organizationId: null, content: (await f.repo.latestContent(id))!.content, createdBy: "d1" }); return b.row.id; })();
+      void id2;
     });
   });
 

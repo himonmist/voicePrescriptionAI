@@ -104,6 +104,11 @@ export function drizzleRxRepo(db: Db = getDb()): RxRepo {
       const content = r.rx.finalVersion ? ((await versionRow(r.rx.id, r.rx.finalVersion))?.content ?? null) : null;
       return { rx: toRx(r.rx), doctor: { name: r.name, bmdc: r.bmdc, specialty: r.specialty }, supersededByCode, content };
     },
+    async parties(rx) {
+      const [d] = await db.select({ name: users.fullName, bmdc: doctorProfiles.bmdcNumber, specialty: doctorProfiles.specialty, address: doctorProfiles.chamberAddress }).from(doctorProfiles).innerJoin(users, eq(users.id, doctorProfiles.userId)).where(eq(doctorProfiles.userId, rx.doctorUserId)).limit(1);
+      const pt = await patients.getPatient(rx.patientId);
+      return { doctor: { name: d?.name ?? "", bmdc: d?.bmdc ?? "", specialty: d?.specialty ?? "", chamberAddress: d?.address ?? null }, patient: { name: pt?.fullName ?? "", dob: pt?.dob ?? "", sex: pt?.sex ?? "", patientCode: pt?.patientCode ?? "" } };
+    },
     async listByConsultation(cid) { return (await db.select().from(prescriptions).where(eq(prescriptions.consultationId, cid)).orderBy(asc(prescriptions.createdAt))).map(toRx); },
     async audit(e) { await db.insert(auditEvents).values({ action: e.action, actorId: e.actorId, organizationId: e.organizationId ?? null, resourceType: "prescription", resourceId: e.resourceId, metadata: e.metadata ?? {} }); },
   };

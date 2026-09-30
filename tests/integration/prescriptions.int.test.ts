@@ -161,6 +161,18 @@ describe.skipIf(!hasDb)("prescriptions (real Postgres)", () => {
     });
   });
 
+  describe("printable copy", () => {
+    it("returns the SEALED version (not a later draft) with doctor and patient details", async () => {
+      const id = await draft(); await save(id, { items: [OK], advice: "Rest" }); const { code } = await finalize(id);
+      const p = await svc.printable(doc(), id);
+      expect(p).toMatchObject({ code, state: "valid", doctor: { name: "Dr d1", bmdc: "B-d1", specialty: "General Practice" }, patient: { name: "Md Rahim Uddin", sex: "male" } });
+      expect(p.patient.patientCode).toMatch(/^SDA-/); expect(p.content.advice).toBe("Rest");
+      const a = await svc.amend(doc(), id, { reason: "Advice corrected after review" });
+      expect((await svc.printable(doc(), id)).state).toBe("superseded"); expect(p.content.advice).toBe("Rest");
+      await expect(svc.printable(doc(), a.prescriptionId)).rejects.toThrow(/finalized/i);
+    });
+  });
+
   describe("access", () => {
     it("other doctors, patients and suspended authors cannot read or change it", async () => {
       const id = await draft();

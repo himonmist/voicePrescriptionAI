@@ -37,6 +37,8 @@ export interface RxRepo {
   amend(id: string, a: { reason: string; by: string; content: PrescriptionContent }): Promise<{ id: string; code: string } | null>;
   cancel(id: string, reason: string, by: string): Promise<boolean>;
   byCode(code: string): Promise<{ rx: Rx; doctor: { name: string; bmdc: string; specialty: string }; supersededByCode: string | null; content: PrescriptionContent | null } | null>;
+  /** Doctor + patient details for the printed copy. */
+  parties(rx: Rx): Promise<{ doctor: { name: string; bmdc: string; specialty: string; chamberAddress: string | null }; patient: { name: string; dob: string; sex: string; patientCode: string } }>;
   listByConsultation(consultationId: string): Promise<Rx[]>;
   audit(e: AuditInput): Promise<void>;
 }
@@ -166,6 +168,17 @@ export function createPrescriptionService(repo: RxRepo, deps: RxDeps) {
       await loadAuthor(actor, id);
       if (!(await repo.cancel(id, why, actor.userId))) throw new ValidationError("This prescription is already closed");
       await audit(actor, "prescription.cancelled", id);
+    },
+
+    /** The sealed copy for printing/PDF. Always the FINALIZED version, labelled if it has since been superseded or cancelled. */
+    async printable(actor: Actor, id: string) {
+      const rx = await loadAuthor(actor, id);
+      if (!rx.finalVersion || !rx.finalizedAt || !["finalized", "superseded", "cancelled"].includes(rx.status)) throw new ValidationError("Only a finalized prescription can be printed");
+      const v = await repo.getVersion(id, rx.finalVersion);
+      if (!v) throw new NotFoundError("Prescription not found");
+      const { doctor, patient } = await repo.parties(rx);
+      await audit(actor, "prescription.printed", id);
+      return { code: rx.code, state: rx.status === "finalized" ? ("valid" as const) : (rx.status as "superseded" | "cancelled"), issuedAt: rx.finalizedAt.toISOString(), content: v.content, doctor, patient };
     },
 
     async listForConsultation(actor: Actor, consultationId: string) {

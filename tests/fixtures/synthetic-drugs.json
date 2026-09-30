@@ -1,0 +1,9 @@
+{
+  "source": { "name": "SYNTHETIC-TEST-DATA", "version": "v1", "publishedAt": "2026-01-01", "licenceNote": "SYNTHETIC test data invented for automated tests — NOT real drug information" },
+  "drugs": [
+    { "genericName": "Testalpha", "strength": "500 mg", "dosageForm": "tablet", "route": "oral", "drugClasses": ["testcillin"], "brandNames": ["Zedol"], "pediatricCaution": "Synthetic paediatric note" },
+    { "genericName": "Testbeta", "strength": "10 mg", "dosageForm": "tablet", "route": "oral", "drugClasses": ["testcillin"] },
+    { "genericName": "Testgamma", "strength": "5 mg", "dosageForm": "capsule", "route": "oral", "highRisk": true }
+  ],
+  "interactions": [ { "ingredientA": "testalpha", "ingredientB": "testgamma", "severity": "major", "description": "Synthetic interaction for tests" } ]
+}
