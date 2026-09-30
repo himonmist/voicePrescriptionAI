@@ -53,6 +53,7 @@ export function drizzleAuthRepo(db: Db = getDb()): AuthRepo {
       const [d] = await db.select({ o: doctorProfiles.organizationId }).from(doctorProfiles).where(eq(doctorProfiles.userId, id)).limit(1);
       return d?.o ?? null;
     },
+    async isTestAccount(id) { const [r] = await db.select({ t: users.isTestAccount }).from(users).where(eq(users.id, id)).limit(1); return r?.t === true; },
     async mfaSecretFor(id) {
       const [r] = await db.select({ enc: users.mfaSecretEnc, at: users.mfaEnabledAt }).from(users).where(eq(users.id, id)).limit(1);
       return r?.enc && r.at ? decryptField(r.enc) : null;

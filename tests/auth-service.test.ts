@@ -124,6 +124,14 @@ describe("auth service", () => {
       const r = await adminLogin(true); if (!r.ok) throw new Error("login failed");
       expect((await svc.authenticate(r.token))?.mfaPending).toBeFalsy();
     });
+    describe("test-account MFA bypass (staging only)", () => {
+      const test = new Set<string>();
+      const mk = (bypass: boolean) => { svc = createAuthService({ ...f.repo, isTestAccount: async (id) => test.has(id) }, new MemoryRateLimiter(), { allowTestMfaBypass: bypass }); };
+      const login = async () => { await svc.registerPatient({ fullName: "A B", email: "adm@x.com", phone: "01712345678", password: "Correct-Horse-9!" }); f.users[0].roles = ["super_admin"]; const r = await svc.login({ email: "adm@x.com", password: "Correct-Horse-9!" }, { ip: "1" }); if (!r.ok) throw new Error("x"); return svc.authenticate(r.token); };
+      it("flagged test admin skips MFA enrolment ONLY when the flag is on", async () => { test.add("u1"); mk(true); expect((await login())?.mfaPending).toBeFalsy(); });
+      it("flag off: test admin is still restricted", async () => { test.add("u1"); mk(false); expect((await login())?.mfaPending).toBe(true); });
+      it("flag on: a REAL (unflagged) admin is still restricted", async () => { test.clear(); mk(true); expect((await login())?.mfaPending).toBe(true); });
+    });
     it("regular users without MFA are not restricted", async () => {
       await svc.registerPatient({ fullName: "A B", email: "p@x.com", phone: "01712345678", password: "Correct-Horse-9!" });
       const r = await svc.login({ email: "p@x.com", password: "Correct-Horse-9!" }, { ip: "1" }); if (!r.ok) throw new Error("x");

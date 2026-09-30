@@ -22,6 +22,8 @@ export interface AuthRepo {
   /** Marks the (hashed) recovery code used. Returns false if unknown or already used. */
   consumeRecoveryCode(userId: string, codeHash: string): Promise<boolean>;
   mfaSecretFor(userId: string): Promise<string | null>;
+  /** Accounts flagged is_test_account (demo seed). Only consulted when the staging bypass is enabled. */
+  isTestAccount?(userId: string): Promise<boolean>;
   audit(e: { action: string; actorId?: string | null; ip?: string; metadata?: Record<string, unknown> }): Promise<void>;
 }
 
@@ -31,7 +33,7 @@ const GENERIC = { ok: false, status: 401, error: "Invalid email or password" } a
 const SESSION_TTL_S = 60 * 60 * 8;
 const LOGIN_LIMIT = { max: 10, windowMs: 15 * 60_000 };
 
-export function createAuthService(repo: AuthRepo, limiter: { hit(key: string, limit: number, windowMs: number): RateResult | Promise<RateResult> }) {
+export function createAuthService(repo: AuthRepo, limiter: { hit(key: string, limit: number, windowMs: number): RateResult | Promise<RateResult> }, opts: { allowTestMfaBypass?: boolean } = {}) {
   async function register(base: { fullName: string; email: string; phone: string; password: string }, roles: Role[], after?: (userId: string) => Promise<void>): Promise<{ ok: true; userId: string } | Fail> {
     const pol = validatePasswordPolicy(base.password);
     if (!pol.ok) return { ok: false, status: 422, error: pol.reason! };
@@ -87,7 +89,9 @@ export function createAuthService(repo: AuthRepo, limiter: { hit(key: string, li
       }
       await repo.resetFailedLogins(user.id);
       const roles = await repo.rolesFor(user.id);
-      const mfaPending = isPrivileged(roles) && !mfaSecret; // must enrol before touching anything else
+      let mfaPending = isPrivileged(roles) && !mfaSecret; // must enrol before touching anything else
+      // Staging convenience: flagged demo accounts may skip enrolment when explicitly enabled. Real accounts are never affected.
+      if (mfaPending && opts.allowTestMfaBypass && (await repo.isTestAccount?.(user.id))) { mfaPending = false; await repo.audit({ action: "auth.mfa_enrolment_bypassed_test_account", actorId: user.id, ip: ctx.ip }); }
       const expiresAt = new Date(Date.now() + SESSION_TTL_S * 1000);
       const sid = await repo.createSession({ userId: user.id, expiresAt, ip: ctx.ip });
       const token = await signSession({ sub: user.id, roles, orgId: await repo.primaryOrgFor(user.id), sid, mfaPending }, SESSION_TTL_S);
