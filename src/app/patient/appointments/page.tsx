@@ -20,7 +20,7 @@ export default async function MyAppointments() {
         <ul className="mt-6 divide-y rounded border">{list.map((a) => (
           <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 p-3">
             <div><p className="font-medium">{a.doctorName}</p><p className="text-sm text-slate-600">{fmtWhen(a.startAt)} · {a.mode === "online" ? "Online" : "In person"}{a.location ? ` · ${a.location}` : ""}</p></div>
-            <div className="flex items-center gap-3"><span className="rounded bg-slate-100 px-2 py-0.5 text-xs">{a.status.replace("_", " ")}</span><AppointmentActions id={a.id} status={a.status} role="patient" /></div>
+            <div className="flex items-center gap-3"><span className="rounded bg-slate-100 px-2 py-0.5 text-xs">{a.status.replace("_", " ")}</span><AppointmentActions id={a.id} status={a.status} role="patient" doctorId={a.doctorUserId} mode={a.mode} /></div>
           </li>))}</ul>)}
       <p className="mt-4 text-xs text-slate-500">Online cancellation closes 2 hours before your appointment.</p>
     </main>

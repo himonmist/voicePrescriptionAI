@@ -7,7 +7,7 @@ async function post(url: string, body?: unknown) {
   return r.ok ? null : (((await r.json().catch(() => ({}))).error as string) ?? "Failed");
 }
 
-export function AppointmentActions({ id, status, role }: { id: string; status: string; role: "patient" | "doctor" | "reception" }) {
+export function AppointmentActions({ id, status, role, doctorId, mode }: { id: string; status: string; role: "patient" | "doctor" | "reception"; doctorId?: string; mode?: string }) {
   const router = useRouter(); const [err, setErr] = useState<string>(); const [busy, setBusy] = useState(false);
   async function run(fn: () => Promise<string | null>) { setBusy(true); setErr(undefined); const e = await fn(); setBusy(false); if (e) setErr(e); else router.refresh(); }
   const setTo = (to: string) => run(() => post(`/api/appointments/${id}/status`, { to }));
@@ -24,6 +24,7 @@ export function AppointmentActions({ id, status, role }: { id: string; status: s
       {role === "doctor" && status === "checked_in" && <button className={b} disabled={busy} onClick={() => setTo("in_progress")}>Start</button>}
       {role === "doctor" && status === "in_progress" && <button className={b} disabled={busy} onClick={() => setTo("completed")}>Complete</button>}
       {role !== "patient" && (status === "booked" || status === "checked_in") && <button className={b} disabled={busy} onClick={() => setTo("no_show")}>No-show</button>}
+      {status === "booked" && doctorId && role !== "reception" && <a className={b} href={`/${role}/appointments/${id}/reschedule?doctor=${encodeURIComponent(doctorId)}&mode=${mode ?? "in_person"}`}>Reschedule</a>}
       {(status === "booked" || status === "checked_in") && <button className={b} disabled={busy} onClick={cancel}>Cancel</button>}
       {err && <span role="alert" className="text-sm text-red-700">Error: {err}</span>}
     </div>

@@ -3,6 +3,7 @@ import { getActor } from "@/server/auth/current-actor";
 import { patientService } from "@/server/patients";
 import { NotFoundError } from "@/server/errors";
 import { AddClinicalItem, ConsentPanel, ResolveItem } from "@/components/PatientActions";
+import { ShareAccess } from "@/components/ShareAccess";
 import { StartConsultation } from "@/components/StartConsultation";
 
 const KIND_LABEL: Record<string, string> = { allergy: "Allergies", condition: "Conditions", medication: "Current medications", immunization: "Immunizations", family_history: "Family history", procedure: "Procedures" };
@@ -33,6 +34,7 @@ export default async function PatientRecord({ params }: { params: Promise<{ id: 
           </div>))}
           {view.level === "clinical" && <AddClinicalItem patientId={id} />}
         </section>
+        {view.level === "clinical" && <ShareAccess patientId={id} />}
         <section aria-labelledby="cons" className="mt-8"><h2 id="cons" className="mb-2 font-medium">Consent</h2>
           <ConsentPanel patientId={id} current={view.clinical.consents.map((c) => ({ kind: c.kind, granted: c.granted, policyVersion: c.policyVersion }))} />
         </section>
