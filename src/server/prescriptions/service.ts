@@ -181,6 +181,16 @@ export function createPrescriptionService(repo: RxRepo, deps: RxDeps) {
       return { code: rx.code, state: rx.status === "finalized" ? ("valid" as const) : (rx.status as "superseded" | "cancelled"), issuedAt: rx.finalizedAt.toISOString(), content: v.content, doctor, patient };
     },
 
+    /** System path for the patient portal: the sealed copy for finalized, superseded or cancelled prescriptions (labelled). Authorization is done by the caller. */
+    async sealedCopyAny(id: string) {
+      const rx = await repo.get(id);
+      if (!rx || !rx.finalVersion || !rx.finalizedAt || !["finalized", "superseded", "cancelled"].includes(rx.status)) throw new NotFoundError("Prescription not found");
+      const v = await repo.getVersion(id, rx.finalVersion);
+      if (!v) throw new NotFoundError("Prescription not found");
+      const { doctor, patient } = await repo.parties(rx);
+      return { code: rx.code, state: rx.status === "finalized" ? ("valid" as const) : (rx.status as "superseded" | "cancelled"), issuedAt: rx.finalizedAt.toISOString(), content: v.content, doctor, patient };
+    },
+
     /** System path for the share-link service (authorization already done there). Not audited here; the share audit records the access. */
     async sealedCopy(id: string) {
       const rx = await repo.get(id);

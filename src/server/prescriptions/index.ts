@@ -12,3 +12,8 @@ import { getDb } from "@/db/client";
 
 let share: ReturnType<typeof createShareService> | undefined;
 export const shareService = () => (share ??= createShareService(drizzleShareRepo(), { patientAccess: patientAccessFor(getDb()), sealedCopy: (id) => prescriptionService().sealedCopy(id) }));
+
+import { createPatientRxView } from "./patient-view";
+import { drizzlePatientRxRepo } from "./patient-repo";
+let pv: ReturnType<typeof createPatientRxView> | undefined;
+export const patientRxView = () => (pv ??= createPatientRxView(drizzlePatientRxRepo(), { copy: (id) => prescriptionService().sealedCopyAny(id) }));

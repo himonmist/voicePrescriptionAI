@@ -107,6 +107,12 @@ chk "revoke" "$(code -b doc.jar -X DELETE $BASE/api/prescriptions/$RX/shares/$SH
 chk "revoked link is dead even with right DOB" "$(pub open '{"dob":"1988-02-02"}')" "no longer valid"
 nochk "share audit holds no PHI" "$(sq "select string_agg(metadata::text,' ') from audit_events where action like 'prescription.share_%'")" "Patient Pat"
 
+echo "patient portal"
+chk "patient sees list" "$(get pat /patient/prescriptions)" "$CODE"; chk "patient opens own sealed copy" "$(get pat /patient/prescriptions/$RX)" "Testalpha"
+chk "doctor cannot use patient portal page" "$(code -b doc.jar $BASE/patient/prescriptions/$RX)" 403
+chk "anonymous redirected" "$(code $BASE/patient/prescriptions/$RX)" 307
+chk "patient audit event" "$(sq "select count(*) from audit_events where action='prescription.patient_viewed'")" "1"
+
 echo "amendment + cancellation"
 A=$(post doc /api/prescriptions/$RX/amend -d '{"reason":"Duration corrected after re-checking"}'); RX2=$(echo "$A" | jq_ "d['prescriptionId']"); CODE2=$(echo "$A" | jq_ "d['code']"); chk "amend creates a new draft" "$A" '"code":"RX-'
 chk "original now superseded (API)" "$(curl -s $BASE/api/public/verify/$CODE)" '"status":"superseded"'; chk "verify page warns AMENDED" "$(curl -s $BASE/verify/$CODE)" "AMENDED"; chk "new draft is not verifiable yet" "$(code $BASE/api/public/verify/$CODE2)" 404
