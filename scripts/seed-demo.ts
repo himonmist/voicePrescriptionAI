@@ -12,7 +12,9 @@ import { hashPassword } from "../src/lib/security/password";
  */
 const DOMAIN = "demo.smartdoctoraid.test";
 const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
-const genPassword = () => `Demo-${randomBytes(9).toString("base64url")}-9!`;
+// Unambiguous alphabet (no l/I/1/O/0) so passwords survive being read off a screen and retyped.
+const ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const genPassword = () => `Demo-${Array.from(randomBytes(10), (b) => ALPHABET[b % ALPHABET.length]).join("")}-9!`;
 
 async function main() {
   const printOnly = process.argv.includes("--sql");
