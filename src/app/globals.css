@@ -1,3 +1,5 @@
 @import "tailwindcss";
 :root { --brand: #0b6ea8; --teal: #0f9d94; --ink: #0f1f2e; }
+@font-face { font-family: "Noto Sans Bengali"; font-weight: 400; font-display: swap; src: url("/fonts/NotoSansBengali-Regular.woff") format("woff"); unicode-range: U+0980-09FF, U+0964-0965, U+200C-200D, U+25CC; }
+@font-face { font-family: "Noto Sans Bengali"; font-weight: 700; font-display: swap; src: url("/fonts/NotoSansBengali-Bold.woff") format("woff"); unicode-range: U+0980-09FF, U+0964-0965, U+200C-200D, U+25CC; }
 body { color: var(--ink); background: #fbfcfd; font-family: system-ui, "Noto Sans Bengali", sans-serif; }

@@ -1,0 +1,1 @@
+Noto Sans and Noto Sans Bengali (subsets from the @fontsource packages), © The Noto Project Authors, licensed under the SIL Open Font License 1.1 (https://openfontlicense.org). Embedded into prescription PDFs so Bengali renders correctly on any device.

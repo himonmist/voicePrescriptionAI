@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { ShareLinks } from "@/components/ShareLinks";
 import { useRouter } from "next/navigation";
 import type { Item, PrescriptionContent } from "@/server/prescriptions/content";
 
@@ -120,6 +121,7 @@ export function PrescriptionEditor(p: Props) {
           <button disabled={busy} onClick={async () => { const reason = window.prompt("Reason for amending (min 10 characters). The original stays on record as superseded:")?.trim(); if (!reason) return; const r = await act("amend", { reason }); if (r) router.push(`/doctor/prescriptions/${r.data.prescriptionId}`); }} className="rounded border px-4 py-2 text-sm">Amend</button></>}
         {(status === "draft" || status === "approved" || status === "finalized") && <button disabled={busy} onClick={async () => { const reason = window.prompt("Reason for cancelling (min 10 characters):")?.trim(); if (reason) await act("cancel", { reason }, "Cancelled."); }} className="rounded border border-red-700 px-4 py-2 text-sm text-red-800">Cancel prescription</button>}
       </section>
+      {status === "finalized" && <ShareLinks prescriptionId={p.id} />}
     </div>
   );
 }

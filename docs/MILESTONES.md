@@ -4,7 +4,7 @@ Each milestone ships only when: tests written first and green, server-side authz
 
 Legend: **Done** = built, tested, deployed. **Partial** = core done, listed gaps remain. **Not started**. **Blocked** = needs something from the owner (account, key, decision).
 
-_Last verified: CI green (GitHub Actions, incl. Postgres integration tests) · Vercel deployment READY · Neon migrations 0000–0008 applied · 338 automated tests._
+_Last verified: CI green (GitHub Actions, incl. Postgres integration tests) · Vercel deployment READY · Neon migrations 0000–0011 applied (0012 pending push) · 480 automated tests (103 need a real Postgres, run in CI)._
 
 | # | Milestone | Status | Done | Remaining / gaps |
 |---|-----------|--------|------|------------------|
@@ -15,7 +15,7 @@ _Last verified: CI green (GitHub Actions, incl. Postgres integration tests) · V
 | M4 | Patient registry / EMR | **Partial** | Encrypted PHI, scoped duplicate detection, consent history, allergies/conditions/meds, doctor-to-doctor sharing (API), merge, PHI-read auditing, doctor UI | Sharing screen (needs doctor picker), receptionist UI, patient portal self-service, break-glass access, record export, retention/erasure workflow, encryption-key rotation |
 | M5 | Appointments | **Partial** | Weekly availability, holidays/blocks, slot engine, DB-enforced no double booking, book/cancel/reschedule (API), day-of workflow, public verified-doctor directory + booking UI, schedule/profile editors | Reschedule UI, receptionist booking UI, reminders (needs M11 delivery), pay-at-booking (M10), video join (M9), approval-required mode, non-Dhaka time zones |
 | M6 | Consultation workspace | **Partial** | Idempotent start, encounter-level access, transcript (Bangla/English, flags, originals kept), 15-section note, vitals flags, immutable versions, amendments, consent gate + auto-stop on withdrawal, completion | **Audio capture + STT (M8, needs provider key — *blocked*)**, note PDF, patient-facing note view |
-| M7 | Prescriptions | **In progress** | — | see M7 scope below |
+| M7 | Prescriptions | **Partial** | Authorized-data drug reference import + safety screening, drafting with optimistic locking, approve → password-confirmed finalize (integrity seal) → amend/cancel, DB-enforced immutability, public verification + QR, A4 print, English PDF, expiring/revocable DOB-gated share links | Drug data must be imported by you (none bundled), Bengali PDF is browser-print only, pregnancy/renal/hepatic not screened, delivery by email/SMS/WhatsApp (M11); see `docs/CLINICAL_SAFETY.md` |
 | M8 | AI: STT + LLM drafting | **Not started** | — | Provider abstraction, schema-validated drafts, uncertainty flags, cost tracking. *Blocked on provider + key.* |
 | M9 | Drug data, reports/OCR, telemedicine | **Not started** | — | Authorized drug reference source (*blocked*), report upload/OCR (needs storage), WebRTC video |
 | M10 | Billing & payments | **Not started** | — | Plans/entitlements, SSLCommerz/bKash adapters, webhooks, invoices, refunds. *Blocked on merchant sandbox credentials.* |
@@ -26,7 +26,7 @@ Built in slices, each test-first:
 1. **Drug reference + safety framework** — tables and admin import for *authorized* reference data (source, version, date), duplicate-ingredient / allergy / high-risk alerts, interaction screening only from loaded data. **No drug data is bundled or invented**; with nothing loaded the UI says screening is unavailable.
 2. **Prescription drafting & versions** — items with doctor-entered dose/frequency/duration (unresolved fields block finalization), immutable versions, optimistic locking.
 3. **Approve → finalize (integrity seal) → amend/cancel** — finalized prescriptions are immutable; corrections create a linked new version with reason; every alert override needs a reason.
-4. **Verification page + QR**, **A4 print / PDF (Bengali)**, **secure share link** (expiring, revocable, recipient-verified).
+4. **Verification page + QR**, **A4 print / PDF** (Bengali via browser print), **secure share link** (expiring, revocable, DOB-verified). ✔ all four slices built.
 Not in M7: email/SMS/WhatsApp delivery (M11), AI drafting (M8).
 
 ## Decisions / inputs needed from you

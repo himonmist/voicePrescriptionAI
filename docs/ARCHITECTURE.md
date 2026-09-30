@@ -55,6 +55,9 @@ Single source of truth: `src/server/patients/access.ts` (`accessLevel`), deny by
 - Deleting patient data later will need an explicit erasure procedure: note versions are immutable by design.
 - **Known limits:** no realtime collaboration; vitals flags are simple range checks, not clinical decision support.
 
+## Prescriptions (M7)
+See `docs/CLINICAL_SAFETY.md`. Lifecycle draft → approved → finalized → superseded/cancelled; content lives in encrypted immutable versions, the row is only the envelope. Finalized rows are tamper-proof via triggers (0011). Share links (`prescription_shares`, 0012) store only a token hash; public endpoints `/api/public/rx/[token]/{open,pdf}` are POST-only (DOB in the body, never the URL), same-origin, IP rate limited (20/min) and `no-store`.
+
 ## Testing
 - `npm test` runs unit + API-handler tests. Integration tests (`tests/integration`) run against a real Postgres when `TEST_DATABASE_URL` is set (CI uses a `postgres:17` service container; locally any throwaway DB) and are skipped otherwise. They apply the real migrations and cover: unique constraints, transactional rollback, atomic lockout counter, append-only audit trigger, DB rate limiter under concurrency, verification workflow with concurrent decisions.
 - The DB client uses the Neon serverless driver for `*.neon.tech` hosts and node-postgres otherwise, so the app runs locally without Neon.

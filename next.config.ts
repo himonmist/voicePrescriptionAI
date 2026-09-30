@@ -8,6 +8,8 @@ const csp = [
 
 const config: NextConfig = {
   poweredByHeader: false,
+  // Prescription PDFs read the bundled fonts at runtime; make sure they are shipped with the serverless functions.
+  outputFileTracingIncludes: { "/api/prescriptions/[id]/pdf": ["./src/assets/fonts/**"] },
   async headers() {
     return [{ source: "/:path*", headers: [
       { key: "Content-Security-Policy", value: csp },
@@ -16,7 +18,7 @@ const config: NextConfig = {
       { key: "X-Frame-Options", value: "DENY" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" },
-    ] }];
+    ] }, { source: "/rx/:path*", headers: [{ key: "Referrer-Policy", value: "no-referrer" }, { key: "Cache-Control", value: "no-store" }, { key: "X-Robots-Tag", value: "noindex, nofollow" }] }];
   },
 };
 export default config;

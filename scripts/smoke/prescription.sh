@@ -84,6 +84,29 @@ chk "Bengali layout" "$(get doc "/doctor/prescriptions/$RX/print?lang=bn")" "ব
 chk "other doctor cannot print" "$(code -b doc2.jar $BASE/doctor/prescriptions/$RX/print)" 404
 chk "editor page renders" "$(get doc /doctor/prescriptions/$RX)" "Safety review"; chk "consultation page offers Prescription" "$(get doc /doctor/consultations/$CID)" "Prescription"
 
+echo "PDF"
+curl -s -b doc.jar -o r.pdf -w "%{http_code}|%{content_type}" "$BASE/api/prescriptions/$RX/pdf" > r.meta; chk "PDF download" "$(cat r.meta)" "200|application/pdf"; chk "is a PDF" "$(head -c 5 r.pdf)" "%PDF-"
+chk "other doctor cannot download" "$(code -b doc2.jar $BASE/api/prescriptions/$RX/pdf)" 404; chk "anonymous cannot download" "$(code $BASE/api/prescriptions/$RX/pdf)" 401
+chk "Bengali layout PDF refused with guidance" "$(get doc "/api/prescriptions/$RX/pdf?lang=bn")" "Save as PDF"
+chk "print page for a Latin prescription offers the PDF link" "$(get doc /doctor/prescriptions/$RX/print)" "Download PDF"
+chk "Bengali print page points to browser Save as PDF" "$(get doc "/doctor/prescriptions/$RX/print?lang=bn")" "Save as PDF"
+
+echo "share link"
+SH=$(post doc /api/prescriptions/$RX/shares -d '{"expiresInDays":3}'); SHP=$(echo "$SH" | jq_ "d['path']"); SHID=$(echo "$SH" | jq_ "d['shareId']"); TOK=${SHP#/rx/}
+chk "link created (token once)" "$SH" '"path":"/rx/'; nochk "list never shows the token" "$(get doc /api/prescriptions/$RX/shares)" "$TOK"
+chk "other doctor cannot create link" "$(code -b doc2.jar -X POST $BASE/api/prescriptions/$RX/shares -H "$J" -H "$O" -d '{}')" 404
+chk "anonymous cannot create link" "$(code -X POST $BASE/api/prescriptions/$RX/shares -H "$J" -H "$O" -d '{}')" 401
+chk "public page renders DOB gate" "$(curl -s $BASE$SHP)" "date of birth"; chk "share page is no-store + no-referrer" "$(curl -sI $BASE$SHP | tr A-Z a-z)" "referrer-policy: no-referrer"
+pub(){ curl -s -X POST "$BASE/api/public/rx/$TOK/$1" -H "$J" -H "$O" -d "$2"; }
+chk "wrong DOB refused" "$(pub open '{"dob":"1999-01-01"}')" "don't match"; nochk "wrong DOB leaks nothing" "$(pub open '{"dob":"1999-01-01"}')" "Patient Pat"
+OP=$(pub open '{"dob":"1988-02-02"}'); chk "right DOB opens sealed copy" "$OP" "Testalpha"; chk "pdf offered for Latin" "$OP" '"pdfAvailable":true'
+curl -s -X POST -o s.pdf "$BASE/api/public/rx/$TOK/pdf" -H "$J" -H "$O" -d '{"dob":"1988-02-02"}'; chk "public PDF" "$(head -c 5 s.pdf)" "%PDF-"
+chk "unknown token gives generic 410" "$(code -X POST $BASE/api/public/rx/$(printf 'x%.0s' $(seq 43))/open -H "$J" -H "$O" -d '{"dob":"1988-02-02"}')" 410
+chk "cross-site POST refused" "$(code -X POST $BASE/api/public/rx/$TOK/open -H "$J" -H "Origin: https://evil.test" -d '{"dob":"1988-02-02"}')" 403
+chk "revoke" "$(code -b doc.jar -X DELETE $BASE/api/prescriptions/$RX/shares/$SHID -H "$O")" 200
+chk "revoked link is dead even with right DOB" "$(pub open '{"dob":"1988-02-02"}')" "no longer valid"
+nochk "share audit holds no PHI" "$(sq "select string_agg(metadata::text,' ') from audit_events where action like 'prescription.share_%'")" "Patient Pat"
+
 echo "amendment + cancellation"
 A=$(post doc /api/prescriptions/$RX/amend -d '{"reason":"Duration corrected after re-checking"}'); RX2=$(echo "$A" | jq_ "d['prescriptionId']"); CODE2=$(echo "$A" | jq_ "d['code']"); chk "amend creates a new draft" "$A" '"code":"RX-'
 chk "original now superseded (API)" "$(curl -s $BASE/api/public/verify/$CODE)" '"status":"superseded"'; chk "verify page warns AMENDED" "$(curl -s $BASE/verify/$CODE)" "AMENDED"; chk "new draft is not verifiable yet" "$(code $BASE/api/public/verify/$CODE2)" 404

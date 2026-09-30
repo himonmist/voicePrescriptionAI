@@ -428,3 +428,20 @@ export const prescriptionVersions = pgTable("prescription_versions", {
   authorId: uuid("author_id").notNull().references(() => users.id),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("rx_version_uq").on(t.prescriptionId, t.version)]);
+
+/** Expiring, revocable share links for a FINALIZED prescription. Only the SHA-256 of the token is stored. */
+export const prescriptionShares = pgTable("prescription_shares", {
+  id: id(),
+  prescriptionId: uuid("prescription_id").notNull().references(() => prescriptions.id),
+  tokenHash: text("token_hash").notNull(),
+  channel: text("channel").notNull().default("link"),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: createdAt(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  revokedBy: uuid("revoked_by").references(() => users.id),
+  failedAttempts: integer("failed_attempts").notNull().default(0),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  accessCount: integer("access_count").notNull().default(0),
+  lastAccessedAt: timestamp("last_accessed_at", { withTimezone: true }),
+}, (t) => [uniqueIndex("rx_share_token_uq").on(t.tokenHash), index("rx_share_rx_idx").on(t.prescriptionId)]);

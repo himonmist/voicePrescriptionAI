@@ -1,6 +1,6 @@
 import type { Role } from "./rbac";
 
-const PUBLIC_PREFIXES = ["/login", "/register", "/api/auth", "/api/public", "/pricing", "/features", "/how-it-works", "/doctors", "/blog", "/faq", "/contact", "/about", "/privacy", "/terms", "/verify", "/_next", "/favicon"];
+const PUBLIC_PREFIXES = ["/login", "/register", "/api/auth", "/api/public", "/pricing", "/features", "/how-it-works", "/doctors", "/blog", "/faq", "/contact", "/about", "/privacy", "/terms", "/verify", "/rx", "/_next", "/favicon"];
 const AREAS: { prefix: string; roles: Role[] }[] = [
   { prefix: "/admin/cms", roles: ["super_admin", "content_manager"] },
   { prefix: "/admin/payments", roles: ["super_admin", "finance"] },
