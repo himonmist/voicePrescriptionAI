@@ -12,6 +12,12 @@ These are engineering guarantees, not regulatory claims. Nothing here is a medic
 8. **Consent** gates recording; absence of a record means no consent.
 9. **Audit** events are append-only and never contain PHI or clinical text.
 
+## AI drafting (M8)
+- The model is treated as untrusted. Each drafted section needs a **verbatim quote** from the transcript; sections, diagnoses and vitals without support are discarded and shown to the doctor as discarded.
+- Diagnoses are always saved as *provisional*. Doctor-written sections are never overwritten. AI sections are marked "AI draft — review" until the doctor edits them; approval stays an explicit doctor action.
+- Sending a transcript to the external AI provider needs the patient's separate **AI processing** consent (recorded in the consent history). Without it, or without a configured key, drafting is refused — there is no mock fallback.
+- Only metadata (tokens, model, status) is stored about AI calls, never transcript or output text. Executing a data-processing agreement with the AI vendor is the owner's responsibility.
+
 ## Known limits
 - Server-side PDF cannot shape Bengali; Bengali prescriptions use the browser's Print → Save as PDF.
 - No email/SMS/WhatsApp delivery yet (M11): the doctor copies the share link.

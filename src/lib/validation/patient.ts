@@ -16,7 +16,7 @@ export const createPatientSchema = z.object({
 });
 export type CreatePatientInput = z.infer<typeof createPatientSchema>;
 
-export const CONSENT_KINDS = ["treatment", "recording", "data_sharing", "sms", "email", "whatsapp"] as const;
+export const CONSENT_KINDS = ["treatment", "recording", "ai_processing", "data_sharing", "sms", "email", "whatsapp"] as const;
 export const consentSchema = z.object({
   kind: z.enum(CONSENT_KINDS), granted: z.boolean(), method: z.enum(["in_person", "verbal", "digital"]), note: z.string().trim().max(500).optional(),
 });

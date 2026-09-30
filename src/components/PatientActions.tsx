@@ -37,7 +37,7 @@ export function ResolveItem({ patientId, itemId }: { patientId: string; itemId: 
   return <span className="ml-2 text-xs"><button onClick={() => go("resolved")} className="underline">resolve</button> · <button onClick={() => go("entered_in_error")} className="underline">entered in error</button>{err && <span role="alert" className="ml-2 text-red-700">{err}</span>}</span>;
 }
 
-const CONSENTS = [["treatment", "Treatment"], ["recording", "Consultation audio recording"], ["data_sharing", "Data sharing"], ["sms", "SMS"], ["email", "Email"], ["whatsapp", "WhatsApp"]] as const;
+const CONSENTS = [["treatment", "Treatment"], ["recording", "Consultation audio recording"], ["ai_processing", "AI processing of the transcript (sent to an external AI provider)"], ["data_sharing", "Data sharing"], ["sms", "SMS"], ["email", "Email"], ["whatsapp", "WhatsApp"]] as const;
 
 export function ConsentPanel({ patientId, current }: { patientId: string; current: { kind: string; granted: boolean; policyVersion: string }[] }) {
   const router = useRouter(); const [err, setErr] = useState<string>(); const [busy, setBusy] = useState(false);

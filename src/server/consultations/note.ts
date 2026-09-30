@@ -9,7 +9,7 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
   differential: "Differential diagnosis", plan: "Plan", investigations: "Investigations", counseling: "Counseling", followUp: "Follow-up",
 };
 
-export interface Section { state: "documented" | "not_documented"; text: string; sources: string[]; origin: "manual" }
+export interface Section { state: "documented" | "not_documented"; text: string; sources: string[]; origin: "manual" | "ai_draft" }
 export interface Vitals { bpSystolic?: number; bpDiastolic?: number; pulse?: number; respRate?: number; tempC?: number; spo2?: number; weightKg?: number; heightCm?: number }
 export interface Diagnosis { text: string; status: "provisional" | "confirmed" }
 export interface NoteContent { sections: Record<SectionKey, Section>; vitals: Vitals | null; diagnoses: Diagnosis[] }
@@ -74,4 +74,17 @@ export function vitalWarnings(v: Vitals | null): string[] {
   if ((v.bpSystolic !== undefined && (v.bpSystolic >= 180 || v.bpSystolic < 90)) || (v.bpDiastolic !== undefined && v.bpDiastolic >= 120)) w.push(`Review: blood pressure ${v.bpSystolic ?? "?"}/${v.bpDiastolic ?? "?"} mmHg is markedly abnormal`);
   if (v.respRate !== undefined && (v.respRate > 24 || v.respRate < 10)) w.push(`Review: respiratory rate ${v.respRate}/min is outside 10–24`);
   return w;
+}
+
+/**
+ * A client always submits the whole note as "manual". If a section is byte-identical to an AI-drafted one from the previous
+ * version, it is still AI-drafted (the doctor has not rewritten it); any edit makes it the doctor's own text.
+ */
+export function carryProvenance(prev: NoteContent | null | undefined, next: NoteContent): NoteContent {
+  if (!prev) return next;
+  for (const k of SECTION_KEYS) {
+    const p = prev.sections[k], n = next.sections[k];
+    if (p.origin === "ai_draft" && n.state === "documented" && p.state === "documented" && p.text === n.text) next.sections[k] = { ...n, origin: "ai_draft", sources: p.sources };
+  }
+  return next;
 }

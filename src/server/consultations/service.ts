@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ForbiddenError, type Actor } from "@/lib/security/rbac";
 import { ConflictError, NotFoundError, ValidationError } from "@/server/errors";
 import type { AccessLevel } from "@/server/patients/access";
-import { documentedCount, parseNoteInput, vitalWarnings, type NoteContent } from "./note";
+import { carryProvenance, documentedCount, parseNoteInput, vitalWarnings, type NoteContent } from "./note";
 
 export interface Consultation { id: string; appointmentId: string | null; doctorUserId: string; patientId: string; organizationId: string | null; mode: "in_person" | "online" | string; status: "in_progress" | "completed" | "cancelled" | string; startedAt: Date; endedAt: Date | null }
 export interface Segment { id: string; consultationId: string; seq: number; speaker: string; text: string; originalText: string | null; startMs?: number | null; endMs?: number | null; source?: string; flagged: boolean }
@@ -134,8 +134,8 @@ export function createConsultationService(repo: ConsultRepo, deps: ConsultDeps) 
       const c = await loadAuthor(actor, id);
       if (c.status === "cancelled") throw new ValidationError("This consultation was cancelled");
       if (!Number.isInteger(input.baseVersion) || input.baseVersion < 0) throw new ValidationError("Invalid base version");
-      const content = parseNoteInput(input.content);
       const existing = await repo.getNote(id);
+      const content = carryProvenance(existing?.content, parseNoteInput(input.content));
       let kind: "edit" | "amendment" = "edit"; let summary: string | undefined;
       if (existing?.status === "approved") {
         const reason = input.amendmentReason?.trim();

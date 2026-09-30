@@ -8,7 +8,7 @@ interface Seg { id: string; seq: number; speaker: string; text: string; original
 interface Props {
   id: string; patientId: string; completed: boolean;
   patient: { name: string; dob: string; sex: string; allergies: string[] };
-  consentRecording: boolean; segments: Seg[];
+  consentRecording: boolean; aiAvailable?: boolean; segments: Seg[];
   note: { status: string; currentVersion: number; content: NoteContent } | null; warnings: string[];
 }
 type Json = Record<string, unknown>;
@@ -29,6 +29,18 @@ export function ConsultationWorkspace(p: Props) {
   const [speaker, setSpeaker] = useState("doctor"); const [line, setLine] = useState("");
   async function addLine(e: React.FormEvent) { e.preventDefault(); if (!line.trim()) return; const r = await api(`/api/consultations/${p.id}/transcript`, "POST", { speaker, text: line }); if (r.ok) { setLine(""); router.refresh(); } else say(false, String(r.data.error ?? "Failed")); }
   async function patchSeg(sid: string, patch: Json) { const r = await api(`/api/consultations/${p.id}/transcript/${sid}`, "PATCH", patch); if (r.ok) router.refresh(); else say(false, String(r.data.error ?? "Failed")); }
+
+  // ---- AI draft ----
+  const [ai, setAi] = useState<{ busy: boolean; dropped: { item: string; reason: string }[]; uncertain: string[]; note?: string }>({ busy: false, dropped: [], uncertain: [] });
+  async function aiDraft() {
+    if (!window.confirm("Send this transcript to the AI service to draft empty note sections? Save your own edits first; sections you have written are never overwritten. The draft must be reviewed by you.")) return;
+    setAi((a) => ({ ...a, busy: true, note: undefined })); const r = await api(`/api/consultations/${p.id}/ai-draft`, "POST");
+    if (!r.ok) { setAi({ busy: false, dropped: [], uncertain: [], note: String(r.data.error ?? "Drafting failed") }); return; }
+    const d = r.data as { saved: boolean; filled: string[]; dropped: { item: string; reason: string }[]; uncertain: string[] };
+    if (d.saved) { try { sessionStorage.setItem(`ai-${p.id}`, JSON.stringify({ filled: d.filled.length, dropped: d.dropped, uncertain: d.uncertain })); } catch {} window.location.reload(); return; }
+    setAi({ busy: false, dropped: d.dropped, uncertain: d.uncertain, note: "The AI found nothing it could ground in the transcript that is not already documented." });
+  }
+  useEffect(() => { try { const v = sessionStorage.getItem(`ai-${p.id}`); if (v) { sessionStorage.removeItem(`ai-${p.id}`); const d = JSON.parse(v); setAi({ busy: false, dropped: d.dropped, uncertain: d.uncertain, note: `AI drafted ${d.filled} section(s). Review every one before approving.` }); } } catch {} }, [p.id]);
 
   // ---- note ----
   const initial = useMemo(() => p.note?.content, [p.note]);
@@ -109,8 +121,10 @@ export function ConsultationWorkspace(p: Props) {
         <button onClick={loadVersions} className="text-sm underline">version history</button></div>
         {restorable && <p className="mt-2 rounded border border-amber-400 bg-amber-50 p-2 text-sm">Unsaved text from a previous session was found. <button className="underline" onClick={() => { const d = JSON.parse(restorable); setTexts(d.texts); setVitals(d.vitals); setDx(d.dx); setRestorable(null); }}>Restore it</button> · <button className="underline" onClick={() => { try { localStorage.removeItem(draftKey); } catch {} setRestorable(null); }}>Discard</button></p>}
         {versions && <ul className="mt-2 rounded border p-2 text-sm">{versions.map((v) => <li key={v.version}>v{v.version} · {v.kind} · {v.authorName} · {new Date(v.createdAt).toLocaleString()}{v.summary ? ` · “${v.summary}”` : ""}</li>)}</ul>}
+        {p.aiAvailable && !approved && !p.completed && <div className="mt-2"><button disabled={ai.busy} onClick={aiDraft} className="rounded border border-[var(--brand)] px-3 py-1.5 text-sm font-medium text-[var(--brand)] disabled:opacity-50">{ai.busy ? "Drafting…" : "Draft with AI"}</button><span className="ml-2 text-xs text-slate-600">Needs the patient's AI-processing consent. Draft only — never approved automatically.</span></div>}
+        {(ai.note || ai.dropped.length > 0 || ai.uncertain.length > 0) && <div role="status" className="mt-2 space-y-1 rounded border border-amber-400 bg-amber-50 p-2 text-sm">{ai.note && <p>{ai.note}</p>}{ai.uncertain.length > 0 && <div><strong>AI flagged as uncertain:</strong><ul className="list-disc pl-5">{ai.uncertain.map((u) => <li key={u}>{u}</li>)}</ul></div>}{ai.dropped.length > 0 && <div><strong>Discarded (not supported by the transcript):</strong><ul className="list-disc pl-5">{ai.dropped.map((d) => <li key={d.item}>{d.item} — {d.reason}</li>)}</ul></div>}</div>}
         <div className="mt-3 space-y-3">{SECTION_KEYS.map((k: SectionKey) => (
-          <div key={k}><label htmlFor={`s-${k}`} className="flex items-center justify-between text-sm font-medium">{SECTION_LABELS[k]}<span className={`text-xs font-normal ${texts[k]?.trim() ? "text-green-800" : "text-slate-500"}`}>{texts[k]?.trim() ? "documented" : "not documented"}</span></label>
+          <div key={k}><label htmlFor={`s-${k}`} className="flex items-center justify-between text-sm font-medium">{SECTION_LABELS[k]}<span className={`text-xs font-normal ${texts[k]?.trim() ? "text-green-800" : "text-slate-500"}`}>{initial?.sections[k].origin === "ai_draft" && texts[k] === initial.sections[k].text ? <span className="mr-auto ml-2 rounded bg-amber-100 px-1.5 text-xs font-normal text-amber-900">AI draft — review</span> : null}{texts[k]?.trim() ? "documented" : "not documented"}</span></label>
             <textarea id={`s-${k}`} rows={k === "hpi" || k === "plan" ? 4 : 2} maxLength={5000} value={texts[k] ?? ""} onChange={(e) => setTexts((t) => ({ ...t, [k]: e.target.value }))} className={c} placeholder="Leave empty if not assessed — it is recorded as “not documented”, never as normal." /></div>))}</div>
         <fieldset className="mt-4 rounded border p-3"><legend className="px-1 text-sm font-medium">Vital signs</legend><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{VITAL_FIELDS.map(([k, label, unit]) => (
           <label key={k} className="text-xs">{label} ({unit})<input inputMode="decimal" value={vitals[k]} onChange={(e) => setVitals((v) => ({ ...v, [k]: e.target.value }))} className={`${c} mt-1`} /></label>))}</div></fieldset>

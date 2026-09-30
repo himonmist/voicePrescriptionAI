@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getActor } from "@/server/auth/current-actor";
 import { consultationService } from "@/server/consultations";
 import { NotFoundError } from "@/server/errors";
+import { draftingService } from "@/server/ai";
 import { ConsultationWorkspace } from "@/components/ConsultationWorkspace";
 
 export default async function ConsultationPage({ params }: { params: Promise<{ id: string }> }) {
@@ -19,7 +20,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
   }
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <ConsultationWorkspace id={id} patientId={w.consultation.patientId} completed={w.consultation.status !== "in_progress"} patient={w.patient} consentRecording={w.consent.recording}
+      <ConsultationWorkspace id={id} patientId={w.consultation.patientId} completed={w.consultation.status !== "in_progress"} patient={w.patient} consentRecording={w.consent.recording} aiAvailable={draftingService().available()}
         segments={w.segments!} note={w.note ? { status: w.note.status, currentVersion: w.note.currentVersion, content: w.note.content } : null} warnings={w.warnings ?? []} />
     </main>);
 }

@@ -445,3 +445,18 @@ export const prescriptionShares = pgTable("prescription_shares", {
   accessCount: integer("access_count").notNull().default(0),
   lastAccessedAt: timestamp("last_accessed_at", { withTimezone: true }),
 }, (t) => [uniqueIndex("rx_share_token_uq").on(t.tokenHash), index("rx_share_rx_idx").on(t.prescriptionId)]);
+
+/** AI call metadata for cost tracking and audit. Never stores transcript or output text. */
+export const aiUsage = pgTable("ai_usage", {
+  id: id(),
+  kind: text("kind").notNull(),
+  consultationId: uuid("consultation_id").references(() => consultations.id),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  status: text("status").notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  latencyMs: integer("latency_ms").notNull().default(0),
+  createdAt: createdAt(),
+}, (t) => [index("ai_usage_user_idx").on(t.userId, t.createdAt)]);
