@@ -4,7 +4,7 @@ Each milestone ships only when: tests written first and green, server-side authz
 
 Legend: **Done** = built, tested, deployed. **Partial** = core done, listed gaps remain. **Not started**. **Blocked** = needs something from the owner (account, key, decision).
 
-_Last verified: CI green (GitHub Actions, incl. Postgres integration tests) · Vercel deployment READY · Neon migrations 0000–0012 applied · 480 automated tests (103 need a real Postgres, run in CI)._
+_Last verified: CI green (GitHub Actions, incl. Postgres integration tests) · Vercel deployment READY · Neon migrations 0000–0013 applied · 502 automated tests (104 need a real Postgres, run in CI)._
 
 | # | Milestone | Status | Done | Remaining / gaps |
 |---|-----------|--------|------|------------------|
